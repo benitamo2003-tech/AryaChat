@@ -1,0 +1,30 @@
+body { margin: 0; font-family: Tahoma, sans-serif; background: #e7ebf0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+
+.settings-container { width: 800px; height: 600px; background: #fff; display: flex; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); overflow: hidden; }
+
+/* سمت راست (Sidebar) */
+.settings-sidebar { width: 300px; border-left: 1px solid #eee; background: #fff; }
+.user-info-header { padding: 20px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+.user-avatar { width: 80px; height: 80px; background: #3390ec; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; }
+.nav-item { padding: 12px 20px; cursor: pointer; transition: 0.3s; text-align: right; font-size: 14px; }
+.nav-item:hover { background: #f4f4f4; }
+.nav-item.active { color: #3390ec; background: #f0f7ff; font-weight: bold; }
+
+/* سمت چپ (Content) */
+.settings-content { flex: 1; padding: 30px; overflow-y: auto; }
+.setting-section { display: none; }
+.setting-section.active { display: block; }
+h2 { margin-bottom: 20px; font-size: 18px; color: #333; }
+
+.input-group { margin-bottom: 15px; }
+.input-group label { display: block; margin-bottom: 5px; font-size: 13px; color: #777; }
+.input-group input, .input-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
+
+.toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+.save-btn { background: #3390ec; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 10px; }
+.danger-btn { color: #e53935; background: none; border: 1px solid #e53935; padding: 10px; width: 100%; cursor: pointer; border-radius: 5px; margin-top: 20px; }
+
+.theme-buttons { display: flex; gap: 10px; margin-top: 10px; }
+    .theme-buttons button { 
+        padding: 15px; border: none; border-radius: 8px; cursor: pointer; color: white; flex: 1; font-weight: bold;
+    }

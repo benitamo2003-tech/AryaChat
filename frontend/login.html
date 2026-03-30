@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>ورود به آریا چت</title>
+    <style>
+        body { font-family: Tahoma, Arial; background: #f4f4f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .auth-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); width: 350px; text-align: center; }
+        .logo { width: 80px; margin-bottom: 20px; }
+        h2 { color: #222; margin-bottom: 10px; font-size: 22px; }
+        p { color: #707579; font-size: 14px; margin-bottom: 25px; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #dadce0; border-radius: 8px; box-sizing: border-box; outline: none; font-size: 16px; transition: 0.3s; }
+        input:focus { border-color: #3390ec; }
+        button { width: 100%; padding: 12px; background: #3390ec; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #2b7bc5; }
+        .step { display: none; }
+        .active { display: block; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" class="logo">
+        
+        <div id="step-email" class="step active">
+            <h2>آریا چت</h2>
+            <p>ایمیل خود را برای دریافت کد وارد کنید</p>
+            <input type="email" id="email" placeholder="ایمیل (benitamo2003@gmail.com)">
+            <button onclick="sendCode()">ادامه</button>
+        </div>
+
+        <div id="step-otp" class="step">
+            <h2>کد تایید</h2>
+            <p>کد ۶ رقمی ارسال شده را وارد کنید</p>
+            <input type="number" id="otp" placeholder="123456">
+            <button onclick="verifyCode()">تایید</button>
+        </div>
+
+        <div id="step-name" class="step">
+            <h2>تکمیل پروفایل</h2>
+            <p>نام خود را وارد کنید </p>
+            <input type="text" id="fname" placeholder="نام">
+            <input type="text" id="lname" placeholder="نام خانوادگی (اختیاری)">
+            <button onclick="completeRegistration()">شروع گفتگو</button>
+        </div>
+
+        <div class="language-selector" style="position: absolute; top: 20px; right: 20px;">
+    <select id="lang-select" onchange="changeLanguage(this.value)" style="padding: 5px; border-radius: 5px; border: 1px solid #ccc; cursor: pointer;">
+        <option value="en">English</option>
+        <option value="fa">فارسی</option>
+    </select>
+</div>
+    </div>
+    <script>
+        // اگر توکن از قبل وجود داشت، مستقیم برو به چت
+window.onload = () => {
+    if (localStorage.getItem("token")) {
+        window.location.href = "/chat";
+    }
+};
+    </script>
+    <script src="/js/login.js"></script>
+    <script src="/js/translations.js"></script>
+    <script src="/js/theme-manager.js"></script>
+    <script src="/js/app.js"></script>
+
+</body>
+</html>

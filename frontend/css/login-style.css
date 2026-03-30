@@ -1,0 +1,19 @@
+:root { --blue: #248bf5; --white: #ffffff; --bg: #f4f4f4; }
+* { box-sizing: border-box; font-family: Tahoma, sans-serif; }
+body { background: var(--bg); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+
+.auth-card { background: var(--white); width: 100%; max-width: 350px; padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+.logo { width: 80px; margin-bottom: 20px; }
+h2 { margin-bottom: 10px; font-size: 22px; }
+p { font-size: 14px; color: #777; margin-bottom: 20px; line-height: 1.5; }
+
+input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; outline: none; text-align: center; font-size: 16px; }
+input:focus { border-color: var(--blue); }
+
+button { width: 100%; padding: 12px; background: var(--blue); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
+button:hover { opacity: 0.9; }
+
+.auth-step { display: none; }
+.auth-step.active { display: block; animation: fadeIn 0.4s ease; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

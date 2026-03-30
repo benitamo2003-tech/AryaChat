@@ -1,0 +1,32 @@
+/* تم پیش‌فرض (آبی تلگرامی) */
+:root {
+    --main-bg: #e7ebf0;
+    --sidebar-bg: #ffffff;
+    --primary-color: #3390ec;
+    --sent-bubble: #effdde;
+    --received-bubble: #ffffff;
+    --text-main: #000000;
+    --text-secondary: #707579;
+}
+
+/* تم صورتی (Pink) */
+[data-theme="pink"] {
+    --main-bg: #fce4ec;
+    --sidebar-bg: #fff1f5;
+    --primary-color: #ec407a;
+    --sent-bubble: #f8bbd0;
+    --received-bubble: #ffffff;
+    --text-main: #4a148c;
+    --text-secondary: #ad1457;
+}
+
+/* تم تیره (Dark) */
+[data-theme="dark"] {
+    --main-bg: #0f1621;
+    --sidebar-bg: #17212b;
+    --primary-color: #5288c1;
+    --sent-bubble: #2b5278;
+    --received-bubble: #182533;
+    --text-main: #ffffff;
+    --text-secondary: #7f91a4;
+}
