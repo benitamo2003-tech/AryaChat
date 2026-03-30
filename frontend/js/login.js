@@ -67,7 +67,7 @@ async function completeRegistration() {
     if (!fname) return alert("وارد کردن نام الزامی است");
 
     try {
-        const res = await fetch('/api/auth/complete-signup', {
+        const res = await fetch('/api/auth/send-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: userEmail, firstName: fname, lastName: lname })

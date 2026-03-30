@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ path: require('path').resolve(__dirname, '.env') });
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
@@ -64,7 +64,7 @@ app.post("/api/auth/verify-code", async (req, res) => {
 });
 
 // مسیر تکمیل ثبت نام
-app.post("/api/auth/complete-signup", async (req, res) => {
+app.post("/api/auth/send-code", async (req, res) => {
     const { email, firstName, lastName } = req.body;
     try {
         const user = await User.create({ email, firstName, lastName });
