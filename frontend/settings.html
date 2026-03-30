@@ -1,89 +1,94 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <title>Settings - Telegram Clone</title>
     <link rel="stylesheet" href="css/settings-style.css">
 </head>
+
 <body>
 
-<div class="settings-container">
-    <div class="settings-sidebar">
-        <div class="user-info-header">
-            <div class="user-avatar" id="current-avatar">👤</div>
-            <div class="user-details">
-                <h3 id="display-name">نام کاربر</h3>
-                <p id="display-email">user@email.com</p>
+    <div class="settings-container">
+        <div class="settings-sidebar">
+            <div class="user-info-header">
+                <div class="user-avatar" id="current-avatar">👤</div>
+                <div class="user-details">
+                    <h3 id="display-name">نام کاربر</h3>
+                    <p id="display-email">user@email.com</p>
+                </div>
             </div>
+
+            <nav class="settings-nav">
+                <div class="nav-item active" onclick="showSection('edit-profile')">✏️ ویرایش پروفایل</div>
+                <div class="nav-item" onclick="showSection('notifications')">🔔 اعلان‌ها و صداها</div>
+                <div class="nav-item" onclick="showSection('privacy')">🔒 حریم خصوصی و امنیت</div>
+                <div class="nav-item" onclick="showSection('data')">📊 داده‌ها و ذخیره‌سازی</div>
+                <div class="nav-item" onclick="showSection('chat-settings')">💬 تنظیمات چت</div>
+                <div class="nav-item" onclick="showSection('folders')">📁 پوشه‌ها</div>
+                <div class="nav-item" onclick="showSection('devices')">💻 دستگاه‌ها</div>
+                <div class="nav-item" onclick="showSection('language')">🌐 زبان</div>
+            </nav>
         </div>
 
-        <nav class="settings-nav">
-            <div class="nav-item active" onclick="showSection('edit-profile')">✏️ ویرایش پروفایل</div>
-            <div class="nav-item" onclick="showSection('notifications')">🔔 اعلان‌ها و صداها</div>
-            <div class="nav-item" onclick="showSection('privacy')">🔒 حریم خصوصی و امنیت</div>
-            <div class="nav-item" onclick="showSection('data')">📊 داده‌ها و ذخیره‌سازی</div>
-            <div class="nav-item" onclick="showSection('chat-settings')">💬 تنظیمات چت</div>
-            <div class="nav-item" onclick="showSection('folders')">📁 پوشه‌ها</div>
-            <div class="nav-item" onclick="showSection('devices')">💻 دستگاه‌ها</div>
-            <div class="nav-item" onclick="showSection('language')">🌐 زبان</div>
-        </nav>
+        <div class="settings-content">
+            <section id="edit-profile" class="setting-section active">
+                <h2>ویرایش پروفایل</h2>
+                <div class="input-group">
+                    <label>نام</label>
+                    <input type="text" id="edit-name" placeholder="نام خود را وارد کنید">
+                </div>
+                <div class="input-group">
+                    <label>ایمیل (نام کاربری)</label>
+                    <input type="email" id="edit-email" readonly>
+                </div>
+                <div class="input-group">
+                    <label>بیوگرافی</label>
+                    <textarea id="edit-bio" placeholder="درباره خودتان بنویسید..."></textarea>
+                </div>
+                <button class="save-btn" onclick="saveProfile()">ذخیره تغییرات</button>
+            </section>
+
+            <section id="privacy" class="setting-section">
+                <h2>حریم خصوصی و امنیت</h2>
+                <div class="toggle-item">
+                    <span>نمایش ایمیل برای دیگران</span>
+                    <input type="checkbox" checked>
+                </div>
+                <div class="toggle-item">
+                    <span>آخرین بازدید و آنلاین بودن</span>
+                    <select>
+                        <option>همه</option>
+                        <option>مخاطبان من</option>
+                        <option>هیچکس</option>
+                    </select>
+                </div>
+                <hr>
+                <button class="danger-btn">پاک کردن تمامی نشست‌ها (Logout other devices)</button>
+            </section>
+
+            <section id="chat-settings" class="setting-section">
+                <h2>تنظیمات چت</h2>
+                <div class="input-group">
+                    <label>اندازه متن</label>
+                    <input type="range" min="12" max="22" value="16">
+                </div>
+                <div class="theme-selection">
+                    <h3>انتخاب تم برنامه</h3>
+                    <div class="theme-buttons">
+                        <button onclick="applyTheme('default')" style="background:#3390ec">آبی کلاسیک</button>
+                        <button onclick="applyTheme('pink')" style="background:#ec407a">صورتی فانتزی</button>
+                        <button onclick="applyTheme('dark')" style="background:#17212b; color:white">تاریک
+                            (Night)</button>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
 
-    <div class="settings-content">
-        <section id="edit-profile" class="setting-section active">
-            <h2>ویرایش پروفایل</h2>
-            <div class="input-group">
-                <label>نام</label>
-                <input type="text" id="edit-name" placeholder="نام خود را وارد کنید">
-            </div>
-            <div class="input-group">
-                <label>ایمیل (نام کاربری)</label>
-                <input type="email" id="edit-email" readonly>
-            </div>
-            <div class="input-group">
-                <label>بیوگرافی</label>
-                <textarea id="edit-bio" placeholder="درباره خودتان بنویسید..."></textarea>
-            </div>
-            <button class="save-btn" onclick="saveProfile()">ذخیره تغییرات</button>
-        </section>
-
-        <section id="privacy" class="setting-section">
-            <h2>حریم خصوصی و امنیت</h2>
-            <div class="toggle-item">
-                <span>نمایش ایمیل برای دیگران</span>
-                <input type="checkbox" checked>
-            </div>
-            <div class="toggle-item">
-                <span>آخرین بازدید و آنلاین بودن</span>
-                <select>
-                    <option>همه</option>
-                    <option>مخاطبان من</option>
-                    <option>هیچکس</option>
-                </select>
-            </div>
-            <hr>
-            <button class="danger-btn">پاک کردن تمامی نشست‌ها (Logout other devices)</button>
-        </section>
-
-        <section id="chat-settings" class="setting-section">
-            <h2>تنظیمات چت</h2>
-            <div class="input-group">
-                <label>اندازه متن</label>
-                <input type="range" min="12" max="22" value="16">
-            </div>
-            <div class="theme-selection">
-    <h3>انتخاب تم برنامه</h3>
-    <div class="theme-buttons">
-        <button onclick="applyTheme('default')" style="background:#3390ec">آبی کلاسیک</button>
-        <button onclick="applyTheme('pink')" style="background:#ec407a">صورتی فانتزی</button>
-        <button onclick="applyTheme('dark')" style="background:#17212b; color:white">تاریک (Night)</button>
-    </div>
-</div>
-        </section>
-    </div>
-</div>
-
-<script src="/frontend/js/settings-logic.js"></script>
-< <script src="/frontend/js/theme-manager.js"></script>
+    <script src="/frontend/js/settings-logic.js"></script>
+    < <script src="/frontend/js/theme-manager.js">
+        </script>
 </body>
+
 </html>
