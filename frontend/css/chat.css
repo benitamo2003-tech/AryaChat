@@ -94,10 +94,11 @@
     .msg { 
         margin:5px 0; 
         padding:8px; 
-        border-radius:5px; 
+        border-radius:10px; 
+        width: 40%;
     }
     .me { 
-        background:#d1e7ff; 
+        background:#048796; 
         text-align:right; 
     }
     .other { 
@@ -131,3 +132,44 @@
         background-color: #176B87;
         
     }
+    /* تنظیم رنگ پیام من برای خوانایی بهتر */
+.me { 
+    background: #048796 !important; 
+    color: white; 
+    margin-left: auto; /* چسبیدن به راست */
+}
+
+.other {
+    margin-right: auto; /* چسبیدن به چپ */
+}
+
+/* ظرف نگهدارنده مدیا */
+.media-container {
+    position: relative;
+    margin-top: 5px;
+}
+
+/* منوی دانلود و فوروارد که با هاور ظاهر میشه */
+.media-options {
+    display: none;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    gap: 5px;
+}
+
+.media-container:hover .media-options {
+    display: flex;
+}
+
+.media-options button {
+    background: rgba(0,0,0,0.5) !important;
+    padding: 5px !important;
+    font-size: 10px !important;
+    border-radius: 5px !important;
+}
+
+.ticks {
+    margin-right: 5px;
+    font-weight: bold;
+}

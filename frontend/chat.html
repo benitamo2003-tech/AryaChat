@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link rel="stylesheet" href="css/chat.css">
   <title>AryaChat - صفحه اصلی</title>
 </head>
@@ -10,26 +11,20 @@
 <body>
 
   <div class="app">
-    <!--list menu-->
     <div class="list">
       <label class="list-dropdown">
         <i class="fa-solid fa-bars-staggered" style="color: rgb(30, 48, 80);">
           <input type="checkbox" id="toggle">
         </i>
         <div class="dropdown-content">
-          <button>Add Account</button>
-          <button>Saved Messages</button>
+          <button onclick="location.href='/profile.html'">پروفایل من</button> <button>Saved Messages</button>
           <button>Contacts</button>
           <button>Setting</button>
-          <button>More</button>
-
+          <button onclick="logout()">خروج</button>
         </div>
       </label>
-
-
-
     </div>
-    <!-- Sidebar -->
+
     <div class="sidebar">
       <h3>AryaChat</h3>
       <p><span id="profile-email"></span></p>
@@ -37,46 +32,59 @@
         <input id="searchInput" placeholder="جستجو با ایمیل..." oninput="searchUser()" />
         <div id="searchResults"></div>
       </div>
-
-
-
+      <div id="chat-list" style="margin-top: 20px;"></div>
     </div>
 
-    <!-- Chat Area -->
     <div class="chat-area">
       <div class="chat-header">
-        <i class="fa-chisel fa-regular fa-bookmark"></i>
-        <h4 id="chat-title">Saved Messages</h4>
-        <span id="status" style="font-size:12px;color:gray"></span>
+        <i class="fa-solid fa-user-circle"></i> <h4 id="chat-title" style="margin-right: 10px;">Saved Messages</h4>
+        <span id="status" style="font-size:12px; margin-right: 10px;"></span>
       </div>
+      
       <div class="messages" id="messages"></div>
+      
       <div class="input-area">
         <button><i class="fa-regular fa-face-smile-wink" style="color: rgb(30, 48, 80); "></i></button>
-        <button><i class="fa-solid fa-paperclip" style="color: rgb(30, 48, 80); "></i></button>
+        
+        <input type="file" id="fileInput" style="display:none" onchange="sendFile(this)" accept="image/*,video/*,audio/*">
+        <button onclick="document.getElementById('fileInput').click()">
+            <i class="fa-solid fa-paperclip" style="color: rgb(30, 48, 80); "></i>
+        </button>
+        
         <input id="msg" placeholder="پیام خود را بنویسید..." />
         <div id="typing" style="font-size:12px;color:gray"></div>
-        <button onclick="sendMessage()"><i class="fa-etch fa-solid fa-paper-plane"
-            style="color: rgb(30, 48, 80);"></i></button>
+        
+        <button onclick="sendMessage()">
+            <i class="fa-solid fa-paper-plane" style="color: rgb(30, 48, 80);"></i>
+        </button>
       </div>
     </div>
 
   </div>
 
-
-
-  <script>
-    // بررسی ورود
+<script>
     const token = localStorage.getItem("token");
     const email = localStorage.getItem("email");
-    if (!token || !email) {
-      window.location.href = "/login.html";
+    
+    // اگر توکن نبود، برگرد به لاگین
+    if (!token) {
+        window.location.href = "/login.html";
     }
-    document.getElementById("profile-email").innerText = email;
-  </script>
+    
+    window.onload = () => {
+        if(document.getElementById("profile-email")) {
+            document.getElementById("profile-email").innerText = email || "کاربر مهمان";
+        }
+    };
+
+    function logout() {
+        localStorage.clear();
+        window.location.href = "/login.html";
+    }
+</script>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/frontend/js/chat.js"></script>
+  <script src="js/chat.js"></script>
 
 </body>
-
 </html>
