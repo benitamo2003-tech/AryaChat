@@ -8,96 +8,55 @@ const chatTitle = document.getElementById('chat-title');
 const statusText = document.getElementById('status');
 
 let activeChat = "Saved Messages"; 
+let activeChatType = "private"; 
 let currentAvatarIndex = 0;
 let userAvatars = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (!myEmail) { window.location.href = "/login.html"; return; }
-    
+// نمایش اولیه اطلاعات
     document.getElementById("profile-email").innerText = myEmail;
-    loadProfileData(); 
-    renderConnectedAccounts(); // نمایش لیست اکانت‌ها برای سوییچ
+    loadProfileData(); // بارگذاری اطلاعات کامل از دیتابیس
 
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
     }
 
-    // ارسال ایمیل به سرور برای لود اختصاصی پیام‌های همین کاربر
-    socket.emit('getOldMessages', { userEmail: myEmail });
+    socket.emit('getOldMessages');
 
-    // کلیک روی عکس اصلی پروفایل
-    document.getElementById('main-avatar').onclick = () => openAvatarViewer(myEmail);
+
+    socket.emit('join', myEmail); 
+    socket.emit('getChatList', myEmail);
+    socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: "Saved Messages", isGroup: false });
+
+   // دریافت لیست چت‌ها از سرور و نمایش دکمه ساخت گروه
+socket.on('receiveChatList', (list) => {
+    const chatListElem = document.getElementById('chat-list');
+    if (!chatListElem) return;
+    chatListElem.innerHTML = ""; 
+
+    // دکمه ساخت گروه - همیشه در بالای لیست
+    const createBtn = document.createElement('div');
+    createBtn.innerHTML = `
+        <div onclick="openCreateGroup()" style="margin-bottom:10px; padding:12px; background:#048796; color:white; border-radius:10px; text-align:center; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span>👥</span> ساخت گروه جدید
+        </div>`;
+    chatListElem.appendChild(createBtn);
+
+    // اضافه کردن چت‌ها
+    list.forEach(item => {
+        updateSidebarUI(item);
+    });
 });
 
-// --- مدیریت اکانت و پروفایل ---
-
-// تابع کمکی برای اینکه مطمئن شویم اکانت فعلی همیشه در لیست ذخیره است
-function syncCurrentAccount() {
-    let accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const currentAcc = {
-        email: myEmail,
-        name: myName,
-        avatar: document.getElementById('main-avatar').src,
-        token: localStorage.getItem("token")
+    document.getElementById('main-avatar').onclick = () => openAvatarViewer(myEmail);
+    
+    // کلیک روی هدر برای دیدن پروفایل
+    document.querySelector('.chat-header').onclick = () => {
+        if (activeChatType === 'private' && activeChat !== "Saved Messages") {
+            openAvatarViewer(activeChat);
+        }
     };
-    const index = accounts.findIndex(a => a.email === myEmail);
-    if (index === -1) {
-        accounts.push(currentAcc);
-    } else {
-        accounts[index] = currentAcc;
-    }
-    localStorage.setItem("allAccounts", JSON.stringify(accounts));
-}
 
-function addAccount() {
-    syncCurrentAccount(); // قبل از رفتن به لاگین جدید، اکانت فعلی رو ذخیره کن
-    
-    localStorage.removeItem("token");
-    localStorage.removeItem("email");
-    window.location.href = "/login.html";
-}
-
-function renderConnectedAccounts() {
-    syncCurrentAccount(); // آپدیت لیست با اطلاعات آخرین اکانت فعال
-    
-    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const container = document.getElementById('accounts-list'); 
-    if (!container) return;
-
-    container.innerHTML = "<h4 style='margin-bottom:10px; font-size:14px; border-bottom:1px solid #ddd; padding-bottom:5px;'>مدیریت حساب‌ها</h4>";
-    
-    accounts.forEach(acc => {
-        const isActive = acc.email === myEmail;
-        const div = document.createElement('div');
-        div.style = `display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:8px; border-radius:10px; transition: 0.3s; ${isActive ? 'background:#e3f2fd; border:1px solid #2196f3;' : 'background:#f8f9fa;'}`;
-        
-        div.innerHTML = `
-            <img src="${acc.avatar}" style="width:35px; height:35px; border-radius:50%; object-fit:cover; border:1px solid #ccc;">
-            <div style="flex:1; font-size:12px;">
-                <b style="display:block; color:#333;">${acc.name}</b>
-                <span style="color:#777; font-size:10px;">${acc.email}</span>
-            </div>
-            ${isActive ? 
-                '<span style="background:#4caf50; color:white; font-size:9px; padding:2px 6px; border-radius:10px;">فعال</span>' : 
-                `<button onclick="switchAccount('${acc.email}')" style="background:#2196f3; color:white; border:none; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px;">ورود</button>`
-            }
-        `;
-        container.appendChild(div);
-    });
-}
-
-function switchAccount(email) {
-    syncCurrentAccount(); // اول وضعیت اکانت فعلی (مثلا علی) رو ذخیره کن که غیب نشه
-
-    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const target = accounts.find(a => a.email === email);
-    if(target) {
-        localStorage.setItem("email", target.email);
-        localStorage.setItem("firstName", target.name);
-        localStorage.setItem("token", target.token);
-        location.reload(); 
-    }
-}
+// --- مدیریت پروفایل (SPA) ---//
 
 function showProfile() {
     document.getElementById('profile-section').style.display = 'block';
@@ -107,110 +66,16 @@ function hideProfile() {
     document.getElementById('profile-section').style.display = 'none';
 }
 
-// باز کردن نمایشگر عکس (هوشمند)
-async function openAvatarViewer(targetEmail) {
-    try {
-        const res = await fetch(`/api/user/profile?email=${targetEmail}`);
-        const data = await res.json();
-        
-        if (data.success && data.user) {
-            userAvatars = [data.user.avatar];
-            if(data.user.avatarHistory) userAvatars = userAvatars.concat(data.user.avatarHistory);
-            
-            currentAvatarIndex = 0;
-            updateViewerDisplay();
-            
-            // نمایش دکمه‌های حذف و ذخیره فقط برای صاحب حساب
-            const ownerTools = document.getElementById('owner-tools');
-            if (ownerTools) {
-                ownerTools.style.display = (targetEmail === myEmail) ? 'flex' : 'none';
-            }
-
-            document.getElementById('avatar-viewer').style.display = 'flex';
-            
-            // قفل اسکرین‌شات فقط وقتی که داریم پروفایل کسی دیگه رو می‌بینیم
-            document.removeEventListener('keyup', preventCapture);
-            if (targetEmail !== myEmail) {
-                document.addEventListener('keyup', preventCapture);
-            }
-        }
-    } catch (err) { console.error(err); }
+function openEditInfo() {
+    document.getElementById('edit-modal').style.display = 'flex';
+    // پر کردن مقادیر فعلی در اینپوت‌ها
+    document.getElementById('edit-fullname').value = myName;
+    document.getElementById('edit-username').value = document.getElementById('info-username').innerText.replace('@', '');
+    document.getElementById('edit-bio').value = document.getElementById('info-bio').innerText;
 }
 
-function updateViewerDisplay() {
-    const img = document.getElementById('full-res-avatar');
-    img.src = userAvatars[currentAvatarIndex];
-    document.getElementById('avatar-counter').innerText = `${currentAvatarIndex + 1} از ${userAvatars.length}`;
-}
 
-function nextAvatar() {
-    if (currentAvatarIndex < userAvatars.length - 1) {
-        currentAvatarIndex++;
-        updateViewerDisplay();
-    }
-}
-
-function prevAvatar() {
-    if (currentAvatarIndex > 0) {
-        currentAvatarIndex--;
-        updateViewerDisplay();
-    }
-}
-
-function closeAvatarViewer() {
-    document.getElementById('avatar-viewer').style.display = 'none';
-    document.removeEventListener('keyup', preventCapture);
-}
-
-function downloadCurrentAvatar() {
-    const url = userAvatars[currentAvatarIndex];
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `AryaChat-Profile.png`;
-    a.click();
-}
-
-function preventCapture(e) {
-    if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 's')) {
-        navigator.clipboard.writeText(""); 
-        alert("⚠️ محافظت امنیتی: امکان اسکرین‌شات از پروفایل دیگران وجود ندارد.");
-    }
-}
-
-// بارگذاری اطلاعات
-async function loadProfileData() {
-    try {
-        const res = await fetch(`/api/user/profile?email=${myEmail}`);
-        const data = await res.json();
-        
-        if (data.success && data.user) {
-            const u = data.user;
-            myName = u.firstName || "کاربر";
-            document.getElementById('info-username').innerText = u.username ? `@${u.username}` : "بدون آیدی";
-            document.getElementById('info-email').innerText = u.email;
-            document.getElementById('info-bio').innerText = u.bio || "بیوگرافی خالی است";
-            document.getElementById('main-avatar').src = u.avatar || 'img/default-avatar.png';
-            document.getElementById('display-name-top').innerText = myName;
-            
-            localStorage.setItem("firstName", myName);
-            if(u.birthDate) checkBirthday(u.birthDate);
-            
-            // بروزرسانی آواتار در لیست اکانت‌ها
-            updateAccountListInfo(u.avatar, myName);
-        }
-    } catch (err) { console.error("خطا در لود پروفایل:", err); }
-}
-
-function updateAccountListInfo(avatar, name) {
-    let accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const idx = accounts.findIndex(a => a.email === myEmail);
-    if(idx !== -1) {
-        accounts[idx].avatar = avatar;
-        accounts[idx].name = name;
-        localStorage.setItem("allAccounts", JSON.stringify(accounts));
-    }
-}
-
+// ذخیره اطلاعات کامل
 async function saveFullProfile() {
     const profileData = {
         email: myEmail,
@@ -229,12 +94,13 @@ async function saveFullProfile() {
     const result = await res.json();
     if(result.success) {
         document.getElementById('edit-modal').style.display = 'none';
-        loadProfileData();
+        loadProfileData(); // رفرش اطلاعات نمایشی
     } else {
-        alert("خطا: آیدی تکراری است یا مشکلی پیش آمده.");
+        alert("خطا: احتمالاً این آیدی قبلاً توسط شخص دیگری انتخاب شده است.");
     }
 }
 
+// آپلود و تغییر عکس پروفایل
 function uploadAvatar(input) {
     const file = input.files[0];
     if (!file) return;
@@ -248,117 +114,20 @@ function uploadAvatar(input) {
             body: JSON.stringify({ email: myEmail, avatar: base64 })
         });
         if((await res.json()).success) {
-            loadProfileData();
+            document.getElementById('main-avatar').src = base64;
         }
     };
     reader.readAsDataURL(file);
 }
 
-async function deleteAvatar() {
-    if(!confirm("آیا از حذف این عکس پروفایل مطمئن هستید؟")) return;
-    const res = await fetch('/api/user/delete-avatar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: myEmail })
-    });
-    if((await res.json()).success) {
-        loadProfileData();
-        closeAvatarViewer();
+function checkBirthday(birthDate) {
+    const today = new Date().toISOString().slice(5, 10); // MM-DD
+    const bDay = birthDate.slice(5, 10);
+    if (today === bDay) {
+        alert(`🎉 ${myName} عزیز، تولدت مبارک! 🎉`);
     }
 }
-// باز کردن مودال ویرایش
-function openEditModal() {
-    const modal = document.getElementById('edit-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-        // پر کردن مقادیر فعلی
-        document.getElementById('edit-fullname').value = myName;
-        // گرفتن یوزرنیم از متن (بدون @)
-        const currentUser = document.getElementById('info-username').innerText.replace('@', '');
-        document.getElementById('edit-username').value = currentUser === "بدون آیدی" ? "" : currentUser;
-        
-        const currentBio = document.getElementById('info-bio').innerText;
-        document.getElementById('edit-bio').value = currentBio === "بیوگرافی خالی است" ? "" : currentBio;
-    }
-}
-
-// فعال کردن کلیک روی متن‌ها برای ویرایش
-document.getElementById('info-username').onclick = openEditModal;
-document.getElementById('info-bio').onclick = openEditModal;
-document.getElementById('info-username').style.cursor = "pointer";
-document.getElementById('info-bio').style.cursor = "pointer";
-
-// بستن مودال
-function closeEditModal() {
-    document.getElementById('edit-modal').style.display = 'none';
-}
-
-// قابلیت کلیک روی اطلاعات پروفایل برای ویرایش سریع
-document.getElementById('info-username').onclick = openEditModal;
-document.getElementById('info-bio').onclick = openEditModal;
-document.getElementById('info-email').onclick = () => alert("ایمیل قابل تغییر نیست، اما می‌توانید بقیه مشخصات را ویرایش کنید.");
-
-// جستجوی لحظه‌ای (بدون نیاز به دکمه)
-document.getElementById('search-input').addEventListener('input', async (e) => {
-    const query = e.target.value.trim();
-    const container = document.getElementById('search-results');
-    
-    if (query.length < 2) { 
-        container.innerHTML = ""; 
-        return; 
-    }
-
-    try {
-        const res = await fetch(`/api/user/search?query=${query}`);
-        const data = await res.json();
-
-        container.innerHTML = ""; 
-
-        if (data.success && data.users && data.users.length > 0) {
-            data.users.forEach(u => {
-                const div = document.createElement('div');
-                div.className = 'search-item';
-                div.style = "display:flex; align-items:center; gap:10px; padding:10px; cursor:pointer; background:#fff; border-bottom:1px solid #eee; transition:0.2s;";
-                
-                // وقتی روی کاربر کلیک شد، چت با او باز شود
-                div.onclick = () => startChatWith(u);
-                
-                div.innerHTML = `
-                    <img src="${u.avatar || 'img/default-avatar.png'}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
-                    <div style="flex:1">
-                        <div style="font-weight:bold; font-size:14px; color:#333;">${u.firstName}</div>
-                        <div style="font-size:11px; color:#048896;">${u.username ? '@' + u.username : u.email}</div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
-    } catch (err) {
-        console.error("Search Error:", err);
-    }
-});
-
-// تابع برای شروع چت با کاربر پیدا شده
-function startChatWith(user) {
-    activeChat = user.email; // ایمیل طرف مقابل می‌شود آیدی چت
-    chatTitle.innerText = user.firstName;
-    document.getElementById('search-results').innerHTML = ""; // بستن نتایج سرچ
-    document.getElementById('search-input').value = ""; // پاک کردن فیلد سرچ
-    
-    // لود پیام‌های قدیمی با این شخص خاص (باید در سرور تعریف شده باشد)
-    messageContainer.innerHTML = `<p style="text-align:center; color:gray; font-size:12px;">شروع گفتگو با ${user.firstName}</p>`;
-    socket.emit('getPrivateMessages', { me: myEmail, other: user.email });
-}
-
-// --- مدیریت پیام‌ها و سیستم چت ---
-
-socket.on('loadOldMessages', (messages) => {
-    messageContainer.innerHTML = ""; 
-    messages.forEach(msg => {
-        const side = msg.sender === myEmail ? 'me' : 'other';
-        appendMessage(msg, side);
-    });
-});
+// --- بخش اصلی: ارسال پیام و فایل ---
 
 function sendMessage() {
     const text = msgInput.value.trim();
@@ -368,46 +137,23 @@ function sendMessage() {
         sender: myEmail,
         senderName: myName,
         text: text,
-        receiver: activeChat, // این خیلی مهمه! اگه تو پی‌وی باشی، ایمیل طرفه
-        type: 'text',
+        receiver: activeChat, 
+        type: activeChatType, 
         time: new Date(),
         seen: false
     };
 
-    // فقط پیام رو به سرور بفرست، خودت دستی append نکن 
-    // اجازه بده سوکت پیام رو برگردونه تا مطمئن بشیم ثبت شده
     socket.emit('chatMessage', messageData);
     msgInput.value = "";
-}
-
-// تابعی برای اضافه کردن مخاطب به لیست سمت راست (Sidebar)
-function addToChatList(userEmail, userName, userAvatar) {
-    const listContainer = document.getElementById('chat-list'); // مطمئن شو این ID در HTML هست
     
-    // اگر قبلاً در لیست بود، دوباره اضافه نکن
-    if (document.getElementById(`chat-item-${userEmail}`)) return;
-
-    const div = document.createElement('div');
-    div.id = `chat-item-${userEmail}`;
-    div.className = 'chat-item';
-    div.style = "display:flex; align-items:center; gap:10px; padding:10px; cursor:pointer; border-bottom:1px solid #f0f0f0;";
-    div.onclick = () => {
-        activeChat = userEmail;
-        chatTitle.innerText = userName;
-        socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: userEmail });
-    };
-
-    div.innerHTML = `
-        <img src="${userAvatar || 'img/default-avatar.png'}" style="width:40px; height:40px; border-radius:50%;">
-        <div style="flex:1">
-            <div style="font-weight:bold; font-size:14px;">${userName}</div>
-            <div id="last-msg-${userEmail}" style="font-size:11px; color:gray;">پیام جدید...</div>
-        </div>
-    `;
-    listContainer.prepend(div);
+    // آپدیت لیست بعد از ارسال پیام
+    setTimeout(() => {
+        socket.emit('getChatList', myEmail);
+    }, 500); 
 }
 
-function sendFile(input) {
+// تابع ارسال فایل (اصلاح شده)
+async function sendFile(input) {
     const file = input.files[0];
     if (!file) return;
 
@@ -420,91 +166,66 @@ function sendFile(input) {
 
         const messageData = {
             sender: myEmail,
-            senderName: localStorage.getItem("firstName") || "کاربر",
-            receiver: activeChat,
+            senderName: myName,
             fileUrl: e.target.result,
             fileType: fileType,
-            type: 'file',
-            time: new Date(),
-            seen: false
+            receiver: activeChat,
+            type: activeChatType,
+            text: "", 
+            time: new Date()
         };
-
         socket.emit('chatMessage', messageData);
-        appendMessage(messageData, 'me');
+        input.value = ""; 
     };
     reader.readAsDataURL(file);
 }
 
+// وقتی پیامی میاد (چه من فرستادم چه اون)
 socket.on('message', (data) => {
-    // ۱. بررسی اینکه پیام مربوط به من هست یا نه
-    const isMeSender = data.sender === myEmail;
-    const isMeReceiver = data.receiver === myEmail;
+    const isMe = data.sender === myEmail;
+    const isTarget = (activeChat === data.receiver || activeChat === data.sender);
 
-    if (isMeSender || isMeReceiver) {
-        
-        // پیدا کردن طرف مقابل برای لیست چت
-        const chatPartnerEmail = isMeSender ? data.receiver : data.sender;
-        const chatPartnerName = isMeSender ? (chatTitle.innerText) : data.senderName;
-
-        // ۲. اضافه کردن به لیست سمت چپ (اگه Saved Messages نبود)
-        if (data.receiver !== "Saved Messages") {
-            updateSidebarList(chatPartnerEmail, chatPartnerName, data.text);
+    if (isTarget) {
+        appendMessage(data, isMe ? 'me' : 'other');
+        // اگر پیام از طرف مقابل بود، سین بزن
+        if (!isMe && data._id) {
+            socket.emit('messageSeen', { msgId: data._id, sender: data.sender });
         }
+    }
 
-        // ۳. نمایش در صفحه چت (فقط اگر چت با اون شخص بازه یا سیو مسیجه)
-        if (activeChat === data.receiver || activeChat === data.sender) {
-            appendMessage(data, isMeSender ? 'me' : 'other');
-            
-            // ارسال سیگنال سین (فقط برای پیام‌های دریافتی)
-            if (!isMeSender && data._id) {
-                socket.emit('messageSeen', { msgId: data._id, sender: data.sender });
-            }
-        }
+    // --- نکته طلایی: آپدیت لیست چت برای نمایش نام مخاطب ---
+    socket.emit('getChatList', myEmail);
 
-        // ۴. نوتیفیکیشن (اگه صفحه چت باز نیست و من گیرنده‌ام)
-        if (isMeReceiver && activeChat !== data.sender && !document.hasFocus()) {
-            new Notification(data.senderName, { body: data.text });
-        }
+    // --- بخش نوتیفیکیشن ---
+    if (!isMe) {
+        showDesktopNotification(data);
     }
 });
 
-// تابع کمکی برای آپدیت لیست سمت چپ
-function updateSidebarList(email, name, lastMsg) {
-    let list = document.getElementById('chat-list'); // این همون کانتینر لیست چت‌هاست
-    if(!list) return;
-
-    let item = document.getElementById(`item-${email}`);
-    if (!item) {
-        item = document.createElement('div');
-        item.id = `item-${email}`;
-        item.className = 'chat-sidebar-item'; // استایل دلخواهت رو بده
-        item.style = "padding:10px; border-bottom:1px solid #eee; cursor:pointer;";
-        list.prepend(item);
+// تابع اختصاصی نوتیفیکیشن
+function showDesktopNotification(data) {
+    if (Notification.permission === "granted") {
+        const notif = new Notification(data.senderName || "پیام جدید", {
+            body: data.text || "یک فایل ارسال شد",
+            icon: 'img/logo.png' // آدرس لوگوی خودت رو بذار
+        });
+        notif.onclick = () => { window.focus(); };
     }
-    
-    item.onclick = () => {
-        activeChat = email;
-        chatTitle.innerText = name;
-        socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: email });
-    };
-
-    item.innerHTML = `
-        <div style="font-weight:bold;">${name}</div>
-        <div style="font-size:11px; color:gray;">${lastMsg.substring(0, 20)}...</div>
-    `;
+    // پخش صدا
+    const audio = new Audio('sounds/notify.mp3');
+    audio.play().catch(() => {});
 }
-// آپدیت شدن تیک‌ها وقتی طرف مقابل پیام رو سین می‌کنه
-socket.on('updateTick', (msgId) => {
-    const tickElem = document.getElementById(`tick-${msgId}`);
-    if (tickElem) {
-        tickElem.innerText = '✔✔';
-        tickElem.style.color = '#4fc3f7'; // آبی شدن تیک‌ها مثل تلگرام
-    }
-});
 
-socket.on('updateTick', (msgId) => {
-    const tickElem = document.getElementById(`tick-${msgId}`);
-    if (tickElem) tickElem.innerText = '✔✔';
+socket.on('loadHistory', (messages) => {
+    messageContainer.innerHTML = ""; 
+    if (messages.length === 0) {
+        messageContainer.innerHTML = `<p style="text-align:center; color:gray; font-size:11px; margin-top:20px;">هنوز پیامی اینجا نیست.</p>`;
+    }
+    messages.forEach(msg => {
+        const side = msg.sender === myEmail ? 'me' : 'other';
+        appendMessage(msg, side);
+    });
+    messageContainer.scrollTop = messageContainer.scrollHeight;
 });
 
 function appendMessage(data, side) {
@@ -512,29 +233,22 @@ function appendMessage(data, side) {
     div.classList.add('msg', side);
     
     let content = "";
-    // بهبود نمایش نام در Saved Messages
-    let senderDisplayName = (data.receiver === "Saved Messages") ? "پیام ذخیره شده" : (data.senderName || data.sender);
-    if (side === 'me' && data.receiver !== "Saved Messages") senderDisplayName = "شما";
-
-    if (data.fileType === 'image') {
-        content = `<div class="media-container"><img src="${data.fileUrl}" onclick="viewMedia('${data.fileUrl}')" style="max-width:100%; border-radius:10px; cursor:zoom-in;"></div>`;
-    } else if (data.fileType === 'video') {
-        content = `<div class="media-container"><video src="${data.fileUrl}" controls style="max-width:100%; border-radius:10px;"></video></div>`;
-    } else if (data.fileType === 'audio') {
-        content = `<div class="media-container"><audio src="${data.fileUrl}" controls preload="auto" style="width:100%"></audio></div>`;
+    if (data.fileUrl) {
+        if (data.fileType === 'image') content = `<img src="${data.fileUrl}" onclick="viewMedia('${data.fileUrl}')" style="max-width:100%; border-radius:10px; cursor:pointer;">`;
+        else if (data.fileType === 'video') content = `<video src="${data.fileUrl}" controls style="max-width:100%; border-radius:10px;"></video>`;
+        else if (data.fileType === 'audio') content = `<audio src="${data.fileUrl}" controls style="width:100%"></audio>`;
     } else {
         content = `<div class="text">${data.text}</div>`;
     }
 
     const tickStatus = data.seen ? '✔✔' : '✔';
-    const ticks = side === 'me' ? `<span class="ticks" id="tick-${data._id || data.time}">${tickStatus}</span>` : '';
+    const ticks = (side === 'me' && data.type === 'private') ? `<span class="ticks" id="tick-${data._id || data.time}" style="color:${data.seen ? '#4fc3f7':'#ccc'}">${tickStatus}</span>` : '';
 
     div.innerHTML = `
-        <div style="font-size: 11px; color: ${side === 'me' ? '#eee' : '#1e3050'}; font-weight: bold;">${senderDisplayName}</div>
+        <div style="font-size: 10px; opacity: 0.8; margin-bottom:4px;">${data.senderName || data.sender}</div>
         ${content}
-        <div style="font-size: 9px; display: flex; color: ${side === 'me' ? '#ddd' : 'gray'}; margin-top:4px;">
+        <div style="font-size: 9px; display: flex; justify-content: space-between; margin-top:4px; opacity:0.7;">
             <span>${new Date(data.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-            <span style="flex:1"></span>
             ${ticks}
         </div>
     `;
@@ -542,76 +256,27 @@ function appendMessage(data, side) {
     messageContainer.scrollTop = messageContainer.scrollHeight;
 }
 
-function checkBirthday(birthDate) {
-    const today = new Date().toISOString().slice(5, 10);
-    if (today === birthDate.slice(5, 10)) {
-        alert(`🎉 ${myName} عزیز، تولدت مبارک! 🎉`);
-    }
-}
+// --- بخش جستجوی کاربر (اصلاح شده) ---
 
-function downloadFile(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); }
-function viewMedia(url) { window.open(url, '_blank'); }
-function logout() {
-    if (!confirm("آیا می‌خواهید از این حساب خارج شوید؟")) return;
-
-    let accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    
-    // ۱. حذف اکانت فعلی از لیست اکانت‌های متصل
-    accounts = accounts.filter(acc => acc.email !== myEmail);
-    localStorage.setItem("allAccounts", JSON.stringify(accounts));
-
-    // ۲. چک کردن اینکه آیا اکانت دیگه‌ای باقی مونده؟
-    if (accounts.length > 0) {
-        // رفتن به اولین اکانت باقی‌مانده
-        const nextAcc = accounts[0];
-        localStorage.setItem("email", nextAcc.email);
-        localStorage.setItem("firstName", nextAcc.name);
-        localStorage.setItem("token", nextAcc.token);
-        
-        alert(`از حساب فعلی خارج شدید. در حال انتقال به حساب ${nextAcc.name}...`);
-        location.reload(); // لود مجدد با اکانت بعدی
-    } else {
-        // اگر هیچ اکانتی نبود، کلاً پاک کن و برو لاگین
-        localStorage.clear();
-        window.location.href = "/login.html";
-    }
-}
-
-// پیدا کردن المنت‌های سرچ
 const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
 
 if (searchInput) {
     searchInput.addEventListener('input', async (e) => {
         const query = e.target.value.trim();
-        
-        if (query.length < 2) {
-            searchResults.innerHTML = "";
-            return;
-        }
+        if (query.length < 2) { searchResults.innerHTML = ""; return; }
 
         try {
             const res = await fetch(`/api/user/search?query=${query}`);
             const data = await res.json();
-
-            searchResults.innerHTML = ""; // پاک کردن نتایج قبلی
-
-            if (data.success && data.users.length > 0) {
+            searchResults.innerHTML = "";
+            if (data.success) {
                 data.users.forEach(u => {
-                    // اگر اکانت خودم بود نشون نده
                     if (u.email === myEmail) return;
-
                     const item = document.createElement('div');
-                    item.style = "display:flex; align-items:center; gap:10px; padding:10px; cursor:pointer; border-bottom:1px solid #eee; background:#fff;";
-                    item.innerHTML = `
-                        <img src="${u.avatar || 'img/default-avatar.png'}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
-                        <div>
-                            <div style="font-size:13px; font-weight:bold;">${u.firstName}</div>
-                            <div style="font-size:10px; color:gray;">${u.username ? '@'+u.username : u.email}</div>
-                        </div>
-                    `;
-                    
-                    // وقتی روی کاربر کلیک کرد، چت با او باز شود
+                    item.className = "search-item";
+                    item.style = "padding:10px; border-bottom:1px solid #eee; cursor:pointer; display:flex; align-items:center; gap:10px; background:white;";
+                    item.innerHTML = `<img src="${u.avatar || 'img/default-avatar.png'}" style="width:30px; height:30px; border-radius:50%;"> <b>${u.firstName}</b>`;
                     item.onclick = () => {
                         startPrivateChat(u);
                         searchResults.innerHTML = "";
@@ -619,25 +284,317 @@ if (searchInput) {
                     };
                     searchResults.appendChild(item);
                 });
-            } else {
-                searchResults.innerHTML = "<div style='padding:10px; font-size:12px; color:red;'>کاربری پیدا نشد.</div>";
             }
-        } catch (err) {
-            console.error("خطا در سرچ:", err);
-        }
+        } catch (err) { console.error(err); }
     });
 }
 
 function startPrivateChat(user) {
     activeChat = user.email;
+    activeChatType = "private";
     chatTitle.innerText = user.firstName;
-    messageContainer.innerHTML = `<p style="text-align:center; color:gray; font-size:11px;">شروع گفتگو با ${user.firstName}</p>`;
+    messageContainer.innerHTML = "";
     
-    // درخواست پیام‌های خصوصی از سرور
-    socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: user.email });
+    // درخواست تاریخچه
+    socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: user.email, isGroup: false });
+    
+    // بلافاصله لیست رو رفرش کن تا اسم طرف بیاد (حتی اگه پیامی نداده باشی)
+    socket.emit('getChatList', myEmail);
 }
 
-socket.on('connect', () => { if(statusText) statusText.innerText = "● آنلاین"; });
-socket.on('disconnect', () => { if(statusText) statusText.innerText = "○ آفلاین"; });
+// --- بخش مدیریت گروه‌ها (Modal بدون Alert) ---
 
+function openCreateGroup() {
+    document.getElementById('group-modal').style.display = 'flex';
+}
+
+function closeGroupModal() {
+    document.getElementById('group-modal').style.display = 'none';
+}
+
+async function confirmCreateGroup() {
+    const name = document.getElementById('group-name-input').value;
+    const username = document.getElementById('group-username-input').value;
+    // فرض بر این است که المنت‌های HTML در پاسخ قبلی اضافه شده‌اند
+    if (!name) return;
+
+    try {
+        const res = await fetch('/api/groups/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, username, creator: myEmail })
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeGroupModal();
+            socket.emit('getChatList', myEmail);
+        }
+    } catch (err) { console.error("Error creating group", err); }
+}
+
+function updateSidebarUI(item) {
+    const list = document.getElementById('chat-list');
+    const div = document.createElement('div');
+    div.className = 'chat-item';
+    div.style = "display:flex; align-items:center; gap:10px; padding:12px; cursor:pointer; position:relative;";
+
+    // ایجاد دایره تعداد پیام (اگر عدد بزرگتر از ۰ بود)
+    let unreadHtml = "";
+    if (item.unreadCount && item.unreadCount > 0) {
+        unreadHtml = `<span class="unread-badge" style="background:#86B6F6; color:white; border-radius:50%; padding:2px 8px; font-size:11px; margin-left:auto;">${item.unreadCount}</span>`;
+    }
+
+    div.innerHTML = `
+        <div class="avatar-sm" style="width:40px; height:40px; background:#eee; border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>
+        <div style="flex:1; overflow:hidden;">
+            <b style="font-size:14px;">${item.name}</b>
+            <div style="font-size:11px; color:gray; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.lastMsg}</div>
+        </div>
+        ${unreadHtml} 
+    `;
+
+    div.onclick = () => {
+        activeChat = item.email;
+        activeChatType = item.type;
+        chatTitle.innerText = item.name;
+        
+        // وقتی روی چت کلیک شد، به سرور بگو همه پیام‌ها رو سین کن (تا عدد غیب بشه)
+        socket.emit('markAllAsSeen', { myEmail: myEmail, partnerEmail: item.email });
+        
+        socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: item.email, isGroup: false });
+    };
+    list.appendChild(div);
+}
+
+// --- توابع پروفایل و حساب‌ها ---
+
+async function loadProfileData() {
+    const res = await fetch(`/api/user/profile?email=${myEmail}`);
+    const data = await res.json();
+    if (data.success && data.user) {
+        myName = data.user.firstName;
+        document.getElementById('display-name-top').innerText = myName;
+        document.getElementById('main-avatar').src = data.user.avatar || 'img/default-avatar.png';
+        document.getElementById('info-email').innerText = data.user.email;
+        document.getElementById('info-username').innerText = data.user.username || "بدون آیدی";
+    }
+}
+
+async function openAvatarViewer(targetEmail) {
+    const res = await fetch(`/api/user/profile?email=${targetEmail}`);
+    const data = await res.json();
+    if (data.success && data.user) {
+        userAvatars = [data.user.avatar, ...(data.user.avatarHistory || [])];
+        currentAvatarIndex = 0;
+        updateViewerDisplay();
+        document.getElementById('owner-tools').style.display = (targetEmail === myEmail) ? 'flex' : 'none';
+        document.getElementById('avatar-viewer').style.display = 'flex';
+    }
+}
+
+function updateViewerDisplay() {
+    document.getElementById('full-res-avatar').src = userAvatars[currentAvatarIndex] || 'img/default-avatar.png';
+    document.getElementById('avatar-counter').innerText = `${currentAvatarIndex + 1} از ${userAvatars.length}`;
+}
+
+function closeAvatarViewer() { document.getElementById('avatar-viewer').style.display = 'none'; }
+function nextAvatar() { if (currentAvatarIndex < userAvatars.length - 1) { currentAvatarIndex++; updateViewerDisplay(); } }
+function prevAvatar() { if (currentAvatarIndex > 0) { currentAvatarIndex--; updateViewerDisplay(); } }
+
+function renderConnectedAccounts() {
+    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const container = document.getElementById('accounts-list'); 
+    if (!container) return;
+    container.innerHTML = "";
+    accounts.forEach(acc => {
+        const div = document.createElement('div');
+        div.className = "account-item";
+        div.style = `padding:8px; cursor:pointer; margin-bottom:5px; border-radius:5px; background:${acc.email === myEmail ? '#e3f2fd' : '#f5f5f5'}`;
+        div.innerHTML = `<b>${acc.name}</b><br><small>${acc.email}</small>`;
+        if(acc.email !== myEmail) div.onclick = () => switchAccount(acc.email);
+        container.appendChild(div);
+    });
+}
+
+function switchAccount(email) {
+    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const target = accounts.find(a => a.email === email);
+    if(target) {
+        localStorage.setItem("email", target.email);
+        localStorage.setItem("firstName", target.name);
+        localStorage.setItem("token", target.token);
+        location.reload(); 
+    }
+}
+
+// اینتراکشن‌ها
 msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+// وقتی سرور می‌گه لیست رو آپدیت کن
+socket.on('requestChatListUpdate', () => {
+    socket.emit('getChatList', myEmail);
+});
+
+// اصلاح تابع سین کردن در سمت کلاینت
+socket.on('updateTick', (msgId) => {
+    const tickElem = document.getElementById(`tick-${msgId}`);
+    if (tickElem) {
+        tickElem.innerText = '✔✔';
+        tickElem.style.color = '#4fc3f7';
+    }
+});
+
+function showProfile() { document.getElementById('profile-section').style.display = 'block'; }
+function hideProfile() { document.getElementById('profile-section').style.display = 'none'; }
+function viewMedia(url) { window.open(url, '_blank'); }
+function openRightPanel(targetEmail) {
+    document.getElementById('right-panel').classList.add('open');
+    
+    // گرفتن اطلاعات از سرور
+    fetch(`/api/user/profile?email=${targetEmail}`)
+    .then(res => res.json())
+    .then(data => {
+        if(data.success) {
+            document.getElementById('panel-avatar').src = data.user.avatar || 'img/default-avatar.png';
+            document.getElementById('panel-name').innerText = data.user.firstName;
+            document.getElementById('panel-subtext').innerText = data.user.username || targetEmail;
+            document.getElementById('panel-bio').innerText = data.user.bio || "No bio yet";
+        }
+    });
+}
+
+function closeRightPanel() {
+    document.getElementById('right-panel').classList.remove('open');
+}
+
+
+
+// باز کردن پنل پروفایل
+async function openUserInfo() {
+    if (activeChat === "Saved Messages") return;
+
+    try {
+        const res = await fetch(`/api/user/profile?email=${activeChat}`);
+        const data = await res.json();
+
+        if (data.success) {
+            const u = data.user;
+            const panel = document.getElementById('right-panel');
+            
+            // پر کردن اطلاعات
+            document.getElementById('panel-img').src = u.avatar || 'img/default-avatar.png';
+            document.getElementById('panel-name').innerText = u.firstName;
+            document.getElementById('panel-bio').innerText = u.bio || "بدون بیوگرافی";
+            document.getElementById('panel-username').innerText = u.username ? '@' + u.username : u.email;
+
+            // به جای کلاس، مستقیم استایل بده که مطمئن شویم باز می‌شود
+            panel.style.display = 'block'; 
+            panel.style.right = '0'; // اگر در CSS مقدار منفی دارد
+        }
+    } catch (err) { console.error("خطا در دریافت پروفایل:", err); }
+}
+
+// تابع بستن را هم اصلاح کن
+function closeRightPanel() {
+    const panel = document.getElementById('right-panel');
+    panel.style.display = 'none';
+    panel.classList.remove('open');
+}
+
+// اتصال به کلیک روی هدر چت
+document.querySelector('.chat-header').onclick = openUserInfo;
+
+async function saveFullProfile() {
+    const fullName = document.getElementById('edit-fullname').value;
+    const username = document.getElementById('edit-username').value;
+    const bio = document.getElementById('edit-bio').value;
+
+    if (!fullName) { alert("نام الزامی است"); return; }
+
+    try {
+        const res = await fetch('/api/user/update', { // مطمئن شو مسیر در بک‌انند همین است
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                email: myEmail, 
+                firstName: fullName, 
+                username: username, 
+                bio: bio 
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert("تغییرات ذخیره شد!");
+            document.getElementById('edit-modal').style.display = 'none';
+            loadProfileData(); // رفرش کردن اطلاعات در صفحه
+        }
+    } catch (err) { alert("خطا در ذخیره اطلاعات"); }
+}
+
+// تابع باز کردن مودال ادیت با مقادیر فعلی
+function openEditModal() {
+    document.getElementById('edit-fullname').value = myName;
+    document.getElementById('edit-username').value = document.getElementById('info-username').innerText.replace('@', '');
+    document.getElementById('edit-bio').value = document.getElementById('info-bio').innerText;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+socket.on('message', (data) => {
+    const isMe = data.sender === myEmail;
+    const isTarget = (activeChat === data.receiver || activeChat === data.sender);
+
+    if (isTarget) {
+        appendMessage(data, isMe ? 'me' : 'other');
+    } else if (!isMe) {
+        // فقط اگر در صفحه چتِ آن شخص نیستیم نوتیفیکیشن بده
+        if (Notification.permission === "granted") {
+            new Notification(data.senderName || "AryaChat", {
+                body: `پیام جدید از ${data.senderName}: ${data.text || "فایل"}`,
+                icon: 'img/logoAryaChat.png'
+            });
+        }
+        const audio = new Audio('sounds/notify.mp3');
+        audio.play().catch(() => {});
+    }
+    socket.emit('getChatList', myEmail);
+});
+
+function addAccount() {
+    // ۱. اطلاعات اکانت فعلی را در لیست ذخیره می‌کنیم که نپرد
+    const currentAcc = {
+        email: localStorage.getItem("email"),
+        name: localStorage.getItem("firstName"),
+        token: localStorage.getItem("token")
+    };
+    let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    if (currentAcc.email && !all.find(a => a.email === currentAcc.email)) {
+        all.push(currentAcc);
+        localStorage.setItem("allAccounts", JSON.stringify(all));
+    }
+
+    // ۲. یک کلید موقت می‌سازیم که صفحه لاگین بفهمد "قصد افزودن" داریم
+    localStorage.setItem("is_adding_new", "true");
+    
+    // ۳. حالا بدون پاک کردن توکن قبلی، فقط به صفحه لاگین برو
+    window.location.href = "/login.html";
+}
+function logout() {
+    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const currentEmail = localStorage.getItem("email");
+
+    // فقط اکانت فعلی را از لیست حذف کن
+    const filteredAccounts = accounts.filter(acc => acc.email !== currentEmail);
+    localStorage.setItem("allAccounts", JSON.stringify(filteredAccounts));
+
+    // اگر اکانت دیگری باقی مانده، برو روی آن، وگرنه برو صفحه لاگین
+    if (filteredAccounts.length > 0) {
+        const nextAcc = filteredAccounts[0];
+        localStorage.setItem("email", nextAcc.email);
+        localStorage.setItem("firstName", nextAcc.name);
+        localStorage.setItem("token", nextAcc.token);
+        location.reload();
+    } else {
+        localStorage.clear();
+        window.location.href = "/login.html";
+    }
+}

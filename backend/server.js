@@ -10,7 +10,7 @@ const JWT_SECRET = "AryaSuperSecretKey2026";
 const app = express();
 const server = http.createServer(app);
 
-// ۱. تنظیمات حجم برای فایل‌های سنگین (موزیک، ویدیو، آواتارهای با کیفیت)
+// ۱. تنظیمات حجم برای فایل‌های سنگین
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -28,11 +28,10 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ اتصال به دیتابیس برقرار شد'))
   .catch(err => console.error('❌ خطا در دیتابیس:', err.message));
 
-// --- مدل کاربر (آپدیت شده برای تاریخچه پروفایل) ---
+// --- مدل کاربر ---
 const User = mongoose.model('User', new mongoose.Schema({
     email: { type: String, unique: true, required: true },
     firstName: String,
-    // تغییر این خط:
     username: { type: String, unique: true, sparse: true, default: undefined }, 
     bio: { type: String, maxlength: 100 },
     birthDate: String,
@@ -40,26 +39,36 @@ const User = mongoose.model('User', new mongoose.Schema({
     avatarHistory: [String]
 }));
 
+// --- مدل گروه (جدید) ---
+const Group = mongoose.model('Group', new mongoose.Schema({
+    name: String,
+    creator: String,
+    inviteCode: { type: String, unique: true },
+    members: [String], // لیست ایمیل اعضا
+    avatar: { type: String, default: 'img/group-default.png' },
+    createdAt: { type: Date, default: Date.now }
+}));
+
+// --- مدل پیام (آپدیت شده برای گروه) ---
 const Message = mongoose.model('Message', new mongoose.Schema({
     sender: String,
     senderName: String,
-    receiver: String,
+    receiver: String, // می‌تواند ایمیل شخص یا ID گروه باشد
     text: String,
     fileUrl: String, 
     fileType: String, 
-    type: String,
+    type: { type: String, default: 'private' }, // private, group, saved
     seen: { type: Boolean, default: false },
     time: { type: Date, default: Date.now }
 }));
 
 const otpStore = new Map();
-
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com', port: 465, secure: true,
     auth: { user: 'benitamo2003@gmail.com', pass: 'izaljwlkmrkonlib' }
 });
 
-// --- API های احراز هویت ---
+// --- API های احراز هویت و پروفایل (بدون تغییر) ---
 
 app.post('/api/auth/send-code', async (req, res) => {
     const { email } = req.body;
@@ -68,8 +77,7 @@ app.post('/api/auth/send-code', async (req, res) => {
     try {
         await transporter.sendMail({
             from: '"AryaChat" <benitamo2003@gmail.com>',
-            to: email,
-            subject: 'کد تایید آریا چت',
+            to: email, subject: 'کد تایید آریا چت',
             html: `<h1 style="text-align:center; color:#048896;">${code}</h1>`
         });
         res.json({ success: true });
@@ -84,9 +92,6 @@ app.post('/api/auth/verify-code', async (req, res) => {
     res.json({ success: true, newUser: !user, user, token });
 });
 
-// --- API های مدیریت پروفایل ---
-
-// دریافت اطلاعات کامل (شامل تاریخچه عکس‌ها)
 app.get('/api/user/profile', async (req, res) => {
     try {
         const user = await User.findOne({ email: req.query.email });
@@ -94,7 +99,6 @@ app.get('/api/user/profile', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
-// به‌روزرسانی اطلاعات متنی
 app.post('/api/user/update-full', async (req, res) => {
     const { email, username, firstName, bio, birthDate } = req.body;
     try {
@@ -107,155 +111,183 @@ app.post('/api/user/update-full', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
-// آپدیت آواتار با قابلیت ذخیره در تاریخچه
 app.post('/api/user/update-avatar', async (req, res) => {
     const { email, avatar } = req.body;
     try {
         const user = await User.findOne({ email });
         if (user) {
             const oldAvatar = user.avatar;
-            // اگر عکس فعلی پیش‌فرض نیست، بفرستش به تاریخچه
-            const updateData = { avatar: avatar };
-            if (oldAvatar && oldAvatar !== 'img/default-avatar.png') {
-                await User.findOneAndUpdate(
-                    { email },
-                    { 
-                        avatar: avatar, 
-                        $push: { avatarHistory: { $each: [oldAvatar], $position: 0 } } 
-                    }
-                );
-            } else {
-                await User.findOneAndUpdate({ email }, { avatar: avatar });
-            }
+            const update = (oldAvatar && oldAvatar !== 'img/default-avatar.png') 
+                ? { avatar, $push: { avatarHistory: { $each: [oldAvatar], $position: 0 } } }
+                : { avatar };
+            await User.findOneAndUpdate({ email }, update);
             res.json({ success: true });
         }
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
-// حذف آواتار فعلی و بازگشت به عکس پیش‌فرض
-app.post('/api/user/delete-avatar', async (req, res) => {
-    const { email } = req.body;
-    try {
-        await User.findOneAndUpdate({ email }, { avatar: 'img/default-avatar.png' });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ success: false }); }
-});
-
-app.post('/api/auth/complete-signup', async (req, res) => {
-    const { email, firstName, lastName } = req.body;
-    try {
-        // استفاده ازfindOneAndUpdate با تنظیمات درست
-        await User.findOneAndUpdate(
-            { email }, 
-            { firstName, lastName }, 
-            { upsert: true, new: true }
-        );
-        
-        const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '30d' });
-        res.json({ success: true, token });
-    } catch (err) {
-        console.error("خطا در تکمیل ثبت‌نام:", err);
-        res.status(500).json({ success: false, message: "خطای سرور در ثبت اطلاعات" });
-    }
-});
-// API برای جستجوی کاربر (بر اساس ایمیل یا آیدی)
 app.get('/api/user/search', async (req, res) => {
     const { query } = req.query;
     if (!query) return res.json({ success: false, users: [] });
-
     try {
-        // حذف @ از ابتدای یوزرنیم اگر کاربر وارد کرده بود
         const cleanQuery = query.startsWith('@') ? query.slice(1) : query;
-        
         const users = await User.find({
             $or: [
                 { email: { $regex: cleanQuery, $options: 'i' } },
                 { username: { $regex: cleanQuery, $options: 'i' } },
                 { firstName: { $regex: cleanQuery, $options: 'i' } }
             ]
-        }).limit(10).select('email firstName username avatar'); // فقط فیلدهای لازم رو بفرست
-
+        }).limit(10).select('email firstName username avatar');
         res.json({ success: true, users });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+    } catch (err) { res.status(500).json({ success: false }); }
 });
+
+// --- API های جدید گروه ---
+
+app.post('/api/groups/create', async (req, res) => {
+    const { name, creator, members } = req.body;
+    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    try {
+        const newGroup = new Group({ name, creator, members: [creator, ...members], inviteCode });
+        await newGroup.save();
+        res.json({ success: true, group: newGroup });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+app.get('/api/groups/join/:code', async (req, res) => {
+    const { code } = req.params;
+    const email = req.query.email;
+    try {
+        const group = await Group.findOne({ inviteCode: code });
+        if (!group) return res.status(404).json({ success: false, message: "کد نامعتبر" });
+        if (!group.members.includes(email)) {
+            await Group.updateOne({ inviteCode: code }, { $push: { members: email } });
+        }
+        res.redirect('/chat');
+    } catch (err) { res.status(500).send("خطای سرور"); }
+});
+
 // --- مدیریت چت (Socket.io) ---
 
-// در فایل server.js بخش io.on('connection')
 io.on('connection', (socket) => {
     
-    // ۱. هر کاربر به محض ورود به اتاق خودش می‌رود
     socket.on('join', (userEmail) => {
         socket.join(userEmail);
-        console.log(userEmail + " Joined private room");
+        console.log(`👤 ${userEmail} Connected`);
     });
 
-    // ۲. اصلاح ارسال پیام شخصی
-    socket.on('chatMessage', async (data) => {
-        const newMessage = new Message(data); // ذخیره در دیتابیس
-        const savedMsg = await newMessage.save();
-
-        // ارسال به فرستنده (خودم)
-        socket.emit('message', savedMsg);
-
-        // ارسال به گیرنده (اگر پی‌وی بود)
-        if (data.receiver && data.receiver !== "Saved Messages") {
-            // پیام فقط به اتاقِ گیرنده فرستاده می‌شود
-            io.to(data.receiver).emit('message', savedMsg);
-        }
+    socket.on('joinGroup', (groupId) => {
+        socket.join(groupId);
+        console.log(`👥 Joined Group: ${groupId}`);
     });
 
-    // ۳. لود کردن پیام‌های دیتابیس (برای اینکه با رفرش پاک نشه)
-    socket.on('getOldMessages', async ({ userEmail, otherEmail }) => {
-        let query;
-        if (!otherEmail || otherEmail === "Saved Messages") {
-            query = { sender: userEmail, receiver: "Saved Messages" };
-        } else {
-            query = {
-                $or: [
-                    { sender: userEmail, receiver: otherEmail },
-                    { sender: otherEmail, receiver: userEmail }
-                ]
-            };
-        }
-        const msgs = await Message.find(query).sort({ time: 1 });
-        socket.emit('loadHistory', msgs);
-    });
-});
+    
     socket.on('chatMessage', async (data) => {
         try {
-            const newMessage = await Message.create({ ...data, time: new Date() });
-            io.emit('message', newMessage);
-        } catch (err) { console.log("خطا در ذخیره پیام:", err); }
+            const newMessage = new Message(data);
+            const savedMsg = await newMessage.save();
+
+            if (data.type === 'group') {
+                io.to(data.receiver).emit('message', savedMsg);
+            } else {
+                // ارسال به خودم (فرستنده)
+                socket.emit('message', savedMsg);
+                
+                // ارسال به گیرنده
+                if (data.receiver && data.receiver !== "Saved Messages") {
+                    io.to(data.receiver).emit('message', savedMsg);
+                    
+                    // --- فیکس آپدیت لیست ---
+                    // به گیرنده می‌گیم لیست چت‌هات رو بروز کن تا نام فرستنده بیاد بالا
+                    io.to(data.receiver).emit('requestChatListUpdate'); 
+                }
+            }
+            // به خود فرستنده هم می‌گیم لیستش رو بروز کنه
+            socket.emit('requestChatListUpdate');
+
+        } catch (err) { console.log(err); }
     });
 
-   socket.on('chatMessage', async (data) => {
+
+    socket.on('getOldMessages', async ({ userEmail, otherEmail, isGroup }) => {
+        try {
+            let query = isGroup 
+                ? { receiver: otherEmail, type: 'group' }
+                : (!otherEmail || otherEmail === "Saved Messages")
+                    ? { sender: userEmail, receiver: "Saved Messages" }
+                    : { $or: [{ sender: userEmail, receiver: otherEmail }, { sender: otherEmail, receiver: userEmail }], type: 'private' };
+            
+            const msgs = await Message.find(query).sort({ time: 1 });
+            socket.emit('loadHistory', msgs);
+        } catch (err) { console.log(err); }
+    });
+
+    socket.on('messageSeen', async ({ msgId, sender }) => {
+        try {
+            const msg = await Message.findByIdAndUpdate(msgId, { seen: true }, { new: true });
+            if (msg) {
+                // خبر دادن به فرستنده که تیک رو آبی کن
+                io.to(msg.sender).emit('updateTick', msgId);
+                // خبر دادن به گیرنده (خودم) که تیک رو در صفحه خودش هم آبی ببینه
+                io.to(msg.receiver).emit('updateTick', msgId);
+            }
+        } catch (err) { console.log(err); }
+    });
+
+    socket.on('getChatList', async (email) => {
     try {
-        const newMessage = new Message(data); // فرض بر این است که مدل Message داری
-        const savedMsg = await newMessage.save();
-        
-        // حالا پیام رو با ID دیتابیس به هر دو طرف بفرست
-        // فرستادن به فرستنده
-        socket.emit('message', savedMsg);
-        
-        // پیدا کردن سوکتِ گیرنده و فرستادن به او
-        // اگر سیستم اتاق (Room) نداری، فعلاً ساده‌ترین راه اینه:
-        socket.broadcast.emit('message', savedMsg); 
-        
+        const myGroups = await Group.find({ members: email });
+        // پیدا کردن تمام پیام‌های شخصی من
+        const allPrivateMsgs = await Message.find({
+            $or: [{ sender: email }, { receiver: email }],
+            receiver: { $ne: "Saved Messages" },
+            type: 'private'
+        }).sort({ time: -1 });
+
+        const chatPartners = {};
+        for (const m of allPrivateMsgs) {
+            const partner = (m.sender === email) ? m.receiver : m.sender;
+            if (!chatPartners[partner]) {
+                // --- بخش جدید: شمارش پیام‌های سین نشده ---
+                const unreadCount = await Message.countDocuments({
+                    sender: partner,
+                    receiver: email,
+                    seen: false
+                });
+
+                chatPartners[partner] = { 
+                    email: partner, 
+                    lastMsg: m.text || "فایل", 
+                    name: (m.sender === email ? "مخاطب" : m.senderName),
+                    type: 'private',
+                    unreadCount: unreadCount // اضافه کردن تعداد به لیست
+                };
+            }
+        }
+        socket.on('markAllAsSeen', async ({ myEmail, partnerEmail }) => {
+    try {
+        // تمام پیام‌هایی که از طرف مقابل به من رسیده رو به Seen تبدیل کن
+        await Message.updateMany(
+            { sender: partnerEmail, receiver: myEmail, seen: false },
+            { $set: { seen: true } }
+        );
+        // حالا لیست جدید رو بفرست تا عدد صفر بشه
+        socket.emit('requestChatListUpdate'); 
+        io.to(partnerEmail).emit('updateAllTicks'); // تیک‌های طرف مقابل رو هم دوتا کن
     } catch (err) { console.log(err); }
 });
+        // ارسال لیست نهایی
+        socket.emit('receiveChatList', [...Object.values(chatPartners)]);
+    } catch (err) { console.log(err); }
+    });
 
-// بخش تیک دوم (Seen)
-socket.on('messageSeen', async ({ msgId }) => {
-    await Message.findByIdAndUpdate(msgId, { seen: true });
-    io.emit('updateTick', msgId); // به همه خبر بده که این پیام سین شد
-});
+    socket.on('disconnect', () => { console.log('❌ Disconnected'); });
 });
 
+// مسیرهای نهایی
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, '../frontend/chat.html')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
 
 server.listen(3000, '0.0.0.0', () => {
-    console.log(`🚀 سرور با امنیت بالا و تاریخچه پروفایل بیدار شد!`);
+    console.log(`🚀 سرور آریا چت (با قابلیت گروه) روی پورت 3000 بیدار شد!`);
 });
