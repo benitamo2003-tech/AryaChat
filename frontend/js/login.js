@@ -78,36 +78,50 @@ async function verifyCode() {
 
 // ۳. تکمیل ثبت‌نام (ذخیره نام و ورود نهایی)
 async function completeRegistration() {
-    const firstName = document.getElementById('fname').value.trim();
-    const lastName = document.getElementById('lname').value.trim();
+    const firstName = document.getElementById('fname').value;
+    const lastName = document.getElementById('lname').value;
+    const email = localStorage.getItem("email"); // ایمیلی که در مرحله تایید کد ذخیره شده بود
 
-    if (!firstName) return alert("وارد کردن نام الزامی است");
+    if (!firstName) return alert("لطفاً نام خود را وارد کنید");
 
     try {
-        const res = await fetch('/api/auth/complete-signup', {
+        const response = await fetch('/api/complete-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                email: userEmail, 
-                firstName: firstName, 
-                lastName: lastName 
-            })
+            body: JSON.stringify({ email, firstName, lastName })
         });
-        
-        const data = await res.json();
 
-        if (data.success) {
-            // ذخیره توکن و ایمیل در مرورگر (بسیار حیاتی)
+        const data = await response.json();
+
+        if (data.token) {
+            // ۱. ذخیره اطلاعات اکانت جدید در حافظه اصلی (برای ورود فعلی)
             localStorage.setItem("token", data.token);
-            localStorage.setItem("email", userEmail);
+            localStorage.setItem("email", email);
+            localStorage.setItem("firstName", firstName);
             
-            console.log("ثبت‌نام تکمیل شد. انتقال به صفحه چت...");
-            window.location.href = "/chat";
+            // ۲. ابطال سیگنال "افزودن حساب جدید" برای جلوگیری از ریدایرکت مجدد
+            localStorage.removeItem("is_adding_new"); 
+
+            // ۳. مدیریت لیست تمام اکانت‌ها (allAccounts)
+            let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+            
+            // چک می‌کنیم اگر این اکانت از قبل در لیست بود، آپدیت شود، در غیر این صورت اضافه شود
+            const existingIndex = all.findIndex(acc => acc.email === email);
+            if (existingIndex > -1) {
+                all[existingIndex] = { email, name: firstName, token: data.token };
+            } else {
+                all.push({ email, name: firstName, token: data.token });
+            }
+            
+            localStorage.setItem("allAccounts", JSON.stringify(all));
+
+            // ۴. انتقال به صفحه چت
+            window.location.href = "/chat.html";
         } else {
-            alert("خطا در ثبت نهایی اطلاعات.");
+            alert("خطا در ثبت اطلاعات: " + (data.message || "خطای ناشناخته"));
         }
     } catch (err) {
-        console.error("خطای ثبت‌نام:", err);
-        alert("ارتباط با سرور در مرحله نهایی قطع شد.");
+        console.error("Registration Error:", err);
+        alert("ارتباط با سرور برقرار نشد. مطمئن شوید سرور روشن است.");
     }
 }

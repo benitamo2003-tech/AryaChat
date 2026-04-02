@@ -132,20 +132,17 @@
         </div>
     </div>
     <script>
-        // اگر توکن از قبل وجود داشت، مستقیم برو به چت
-        window.onload = () => {
-            if (localStorage.getItem("token")) {
-                window.location.href = "/chat";
-            }
-        };
+    (function() {
         const token = localStorage.getItem("token");
-const isAdding = localStorage.getItem("is_adding_new");
+        const isAddingNew = localStorage.getItem("is_adding_new");
 
-// فقط اگر توکن داشت "و" قصد افزودن اکانت جدید نداشت، بفرستش به چت
-if (token && isAdding !== "true") {
-    window.location.href = "/chat.html";
-}
-    </script>
+        // اگر توکن معتبر داریم و قصد افزودن حساب نداریم، مستقیم برو به چت
+        if (token && isAddingNew !== "true") {
+            window.location.href = "/chat.html";
+        }
+        // اگر isAddingNew فعال باشد، اسکریپت اجازه می‌دهد کاربر در همین صفحه بماند
+    })();
+</script>
     <script src="js/login.js"></script>
     <script src="js/app.js"></script>
 

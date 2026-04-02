@@ -5,35 +5,51 @@ let myName = localStorage.getItem("firstName") || "کاربر";
 const messageContainer = document.getElementById('messages');
 const msgInput = document.getElementById('msg');
 const chatTitle = document.getElementById('chat-title');
-const statusText = document.getElementById('status');
 
 let activeChat = "Saved Messages"; 
 let activeChatType = "private"; 
 let currentAvatarIndex = 0;
 let userAvatars = [];
 
-// نمایش اولیه اطلاعات
-    document.getElementById("profile-email").innerText = myEmail;
-    loadProfileData(); // بارگذاری اطلاعات کامل از دیتابیس
+// --- شروع کار با لود صفحه ---
+//document.addEventListener('DOMContentLoaded', () => {
+//    if (!myEmail) { window.location.href = "/login.html"; return; }
+    
+ //   document.getElementById("profile-email").innerText = myEmail;
+ //   loadProfileData(); 
+ //   renderConnectedAccounts(); 
 
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
+ //   if (Notification.permission !== "granted") {
+ //       Notification.requestPermission();
+ //   }
+
+ //   socket.emit('join', myEmail); 
+//    socket.emit('getChatList', myEmail);
+ //   socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: "Saved Messages", isGroup: false });
+//});
+document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem("token");
+    const email = localStorage.getItem("email");
+
+    // اگر اطلاعات ناقص بود، سریع بفرستش لاگین و همونجا متوقف شو
+    if (!token || !email || token === "undefined") {
+        localStorage.clear(); // پاکسازی برای اطمینان
+        window.location.href = "/login.html";
+        return; 
     }
 
-    socket.emit('getOldMessages');
-
-
-    socket.emit('join', myEmail); 
-    socket.emit('getChatList', myEmail);
-    socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: "Saved Messages", isGroup: false });
-
-   // دریافت لیست چت‌ها از سرور و نمایش دکمه ساخت گروه
+    // بقیه کدها (socket.emit و ...) فقط وقتی اجرا می‌شه که لاگین معتبر باشه
+    socket.emit('join', email);
+    socket.emit('getChatList', email);
+    // ... بقیه توابع
+});
+// --- دریافت لیست چت‌ها ---
 socket.on('receiveChatList', (list) => {
     const chatListElem = document.getElementById('chat-list');
     if (!chatListElem) return;
     chatListElem.innerHTML = ""; 
 
-    // دکمه ساخت گروه - همیشه در بالای لیست
+    // دکمه ساخت گروه
     const createBtn = document.createElement('div');
     createBtn.innerHTML = `
         <div onclick="openCreateGroup()" style="margin-bottom:10px; padding:12px; background:#048796; color:white; border-radius:10px; text-align:center; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -41,93 +57,35 @@ socket.on('receiveChatList', (list) => {
         </div>`;
     chatListElem.appendChild(createBtn);
 
-    // اضافه کردن چت‌ها
-    list.forEach(item => {
-        updateSidebarUI(item);
-    });
+    list.forEach(item => updateSidebarUI(item));
 });
 
-    document.getElementById('main-avatar').onclick = () => openAvatarViewer(myEmail);
-    
-    // کلیک روی هدر برای دیدن پروفایل
-    document.querySelector('.chat-header').onclick = () => {
-        if (activeChatType === 'private' && activeChat !== "Saved Messages") {
-            openAvatarViewer(activeChat);
+// --- مدیریت پیام‌ها و نوتیفیکیشن (نسخه اصلاح شده) ---
+socket.on('message', (data) => {
+    const isMe = data.sender === myEmail;
+    const isTarget = (activeChat === data.receiver || activeChat === data.sender);
+
+    if (isTarget) {
+        appendMessage(data, isMe ? 'me' : 'other');
+        if (!isMe && data._id) {
+            socket.emit('messageSeen', { msgId: data._id, sender: data.sender });
         }
-    };
-
-// --- مدیریت پروفایل (SPA) ---//
-
-function showProfile() {
-    document.getElementById('profile-section').style.display = 'block';
-}
-
-function hideProfile() {
-    document.getElementById('profile-section').style.display = 'none';
-}
-
-function openEditInfo() {
-    document.getElementById('edit-modal').style.display = 'flex';
-    // پر کردن مقادیر فعلی در اینپوت‌ها
-    document.getElementById('edit-fullname').value = myName;
-    document.getElementById('edit-username').value = document.getElementById('info-username').innerText.replace('@', '');
-    document.getElementById('edit-bio').value = document.getElementById('info-bio').innerText;
-}
-
-
-// ذخیره اطلاعات کامل
-async function saveFullProfile() {
-    const profileData = {
-        email: myEmail,
-        username: document.getElementById('edit-username').value.trim(),
-        firstName: document.getElementById('edit-fullname').value.trim(),
-        bio: document.getElementById('edit-bio').value.trim(),
-        birthDate: document.getElementById('edit-birth').value
-    };
-
-    const res = await fetch('/api/user/update-full', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileData)
-    });
-    
-    const result = await res.json();
-    if(result.success) {
-        document.getElementById('edit-modal').style.display = 'none';
-        loadProfileData(); // رفرش اطلاعات نمایشی
-    } else {
-        alert("خطا: احتمالاً این آیدی قبلاً توسط شخص دیگری انتخاب شده است.");
     }
-}
 
-// آپلود و تغییر عکس پروفایل
-function uploadAvatar(input) {
-    const file = input.files[0];
-    if (!file) return;
+    // آپدیت لیست کناری برای آخرین پیام و تعداد سین نشده
+    socket.emit('getChatList', myEmail);
 
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        const base64 = e.target.result;
-        const res = await fetch('/api/user/update-avatar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: myEmail, avatar: base64 })
-        });
-        if((await res.json()).success) {
-            document.getElementById('main-avatar').src = base64;
+    // نوتیفیکیشن فقط برای پیام‌هایی که در چت فعلی نیستند
+    if (!isMe && !isTarget) {
+        if (Notification.permission === "granted") {
+            new Notification(data.senderName || "پیام جدید", {
+                body: data.text || "یک فایل ارسال شد",
+                icon: 'img/logo.png'
+            });
         }
-    };
-    reader.readAsDataURL(file);
-}
-
-function checkBirthday(birthDate) {
-    const today = new Date().toISOString().slice(5, 10); // MM-DD
-    const bDay = birthDate.slice(5, 10);
-    if (today === bDay) {
-        alert(`🎉 ${myName} عزیز، تولدت مبارک! 🎉`);
+        new Audio('sounds/notify.mp3').play().catch(() => {});
     }
-}
-// --- بخش اصلی: ارسال پیام و فایل ---
+});
 
 function sendMessage() {
     const text = msgInput.value.trim();
@@ -145,101 +103,17 @@ function sendMessage() {
 
     socket.emit('chatMessage', messageData);
     msgInput.value = "";
-    
-    // آپدیت لیست بعد از ارسال پیام
-    setTimeout(() => {
-        socket.emit('getChatList', myEmail);
-    }, 500); 
 }
-
-// تابع ارسال فایل (اصلاح شده)
-async function sendFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        let fileType = 'file';
-        if (file.type.startsWith('image/')) fileType = 'image';
-        else if (file.type.startsWith('video/')) fileType = 'video';
-        else if (file.type.startsWith('audio/')) fileType = 'audio';
-
-        const messageData = {
-            sender: myEmail,
-            senderName: myName,
-            fileUrl: e.target.result,
-            fileType: fileType,
-            receiver: activeChat,
-            type: activeChatType,
-            text: "", 
-            time: new Date()
-        };
-        socket.emit('chatMessage', messageData);
-        input.value = ""; 
-    };
-    reader.readAsDataURL(file);
-}
-
-// وقتی پیامی میاد (چه من فرستادم چه اون)
-socket.on('message', (data) => {
-    const isMe = data.sender === myEmail;
-    const isTarget = (activeChat === data.receiver || activeChat === data.sender);
-
-    if (isTarget) {
-        appendMessage(data, isMe ? 'me' : 'other');
-        // اگر پیام از طرف مقابل بود، سین بزن
-        if (!isMe && data._id) {
-            socket.emit('messageSeen', { msgId: data._id, sender: data.sender });
-        }
-    }
-
-    // --- نکته طلایی: آپدیت لیست چت برای نمایش نام مخاطب ---
-    socket.emit('getChatList', myEmail);
-
-    // --- بخش نوتیفیکیشن ---
-    if (!isMe) {
-        showDesktopNotification(data);
-    }
-});
-
-// تابع اختصاصی نوتیفیکیشن
-function showDesktopNotification(data) {
-    if (Notification.permission === "granted") {
-        const notif = new Notification(data.senderName || "پیام جدید", {
-            body: data.text || "یک فایل ارسال شد",
-            icon: 'img/logo.png' // آدرس لوگوی خودت رو بذار
-        });
-        notif.onclick = () => { window.focus(); };
-    }
-    // پخش صدا
-    const audio = new Audio('sounds/notify.mp3');
-    audio.play().catch(() => {});
-}
-
-socket.on('loadHistory', (messages) => {
-    messageContainer.innerHTML = ""; 
-    if (messages.length === 0) {
-        messageContainer.innerHTML = `<p style="text-align:center; color:gray; font-size:11px; margin-top:20px;">هنوز پیامی اینجا نیست.</p>`;
-    }
-    messages.forEach(msg => {
-        const side = msg.sender === myEmail ? 'me' : 'other';
-        appendMessage(msg, side);
-    });
-    messageContainer.scrollTop = messageContainer.scrollHeight;
-});
 
 function appendMessage(data, side) {
     const div = document.createElement('div');
     div.classList.add('msg', side);
     
-    let content = "";
-    if (data.fileUrl) {
-        if (data.fileType === 'image') content = `<img src="${data.fileUrl}" onclick="viewMedia('${data.fileUrl}')" style="max-width:100%; border-radius:10px; cursor:pointer;">`;
-        else if (data.fileType === 'video') content = `<video src="${data.fileUrl}" controls style="max-width:100%; border-radius:10px;"></video>`;
-        else if (data.fileType === 'audio') content = `<audio src="${data.fileUrl}" controls style="width:100%"></audio>`;
-    } else {
-        content = `<div class="text">${data.text}</div>`;
-    }
+    let content = data.fileUrl ? 
+        (data.fileType === 'image' ? `<img src="${data.fileUrl}" onclick="viewMedia('${data.fileUrl}')" style="max-width:100%; border-radius:10px; cursor:pointer;">` :
+        data.fileType === 'video' ? `<video src="${data.fileUrl}" controls style="max-width:100%; border-radius:10px;"></video>` :
+        `<audio src="${data.fileUrl}" controls style="width:100%"></audio>`) :
+        `<div class="text">${data.text}</div>`;
 
     const tickStatus = data.seen ? '✔✔' : '✔';
     const ticks = (side === 'me' && data.type === 'private') ? `<span class="ticks" id="tick-${data._id || data.time}" style="color:${data.seen ? '#4fc3f7':'#ccc'}">${tickStatus}</span>` : '';
@@ -250,351 +124,268 @@ function appendMessage(data, side) {
         <div style="font-size: 9px; display: flex; justify-content: space-between; margin-top:4px; opacity:0.7;">
             <span>${new Date(data.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             ${ticks}
-        </div>
-    `;
+        </div>`;
     messageContainer.appendChild(div);
     messageContainer.scrollTop = messageContainer.scrollHeight;
 }
 
-// --- بخش جستجوی کاربر (اصلاح شده) ---
-
-const searchInput = document.getElementById('search-input');
-const searchResults = document.getElementById('search-results');
-
-if (searchInput) {
-    searchInput.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 2) { searchResults.innerHTML = ""; return; }
-
-        try {
-            const res = await fetch(`/api/user/search?query=${query}`);
-            const data = await res.json();
-            searchResults.innerHTML = "";
-            if (data.success) {
-                data.users.forEach(u => {
-                    if (u.email === myEmail) return;
-                    const item = document.createElement('div');
-                    item.className = "search-item";
-                    item.style = "padding:10px; border-bottom:1px solid #eee; cursor:pointer; display:flex; align-items:center; gap:10px; background:white;";
-                    item.innerHTML = `<img src="${u.avatar || 'img/default-avatar.png'}" style="width:30px; height:30px; border-radius:50%;"> <b>${u.firstName}</b>`;
-                    item.onclick = () => {
-                        startPrivateChat(u);
-                        searchResults.innerHTML = "";
-                        searchInput.value = "";
-                    };
-                    searchResults.appendChild(item);
-                });
-            }
-        } catch (err) { console.error(err); }
-    });
+// --- مدیریت پروفایل و ادیت اینفو ---
+async function loadProfileData() {
+    try {
+        const res = await fetch(`/api/user/profile?email=${myEmail}`);
+        const data = await res.json();
+        if (data.success && data.user) {
+            const u = data.user;
+            myName = u.firstName || "کاربر";
+            document.getElementById('info-username').innerText = u.username ? `@${u.username}` : "بدون آیدی";
+            document.getElementById('info-email').innerText = u.email;
+            document.getElementById('info-bio').innerText = u.bio || "بیوگرافی خالی است";
+            document.getElementById('main-avatar').src = u.avatar || 'img/default-avatar.png';
+            document.getElementById('display-name-top').innerText = myName;
+            localStorage.setItem("firstName", myName);
+        }
+    } catch (err) { console.error(err); }
 }
 
-function startPrivateChat(user) {
-    activeChat = user.email;
-    activeChatType = "private";
-    chatTitle.innerText = user.firstName;
-    messageContainer.innerHTML = "";
-    
-    // درخواست تاریخچه
-    socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: user.email, isGroup: false });
-    
-    // بلافاصله لیست رو رفرش کن تا اسم طرف بیاد (حتی اگه پیامی نداده باشی)
-    socket.emit('getChatList', myEmail);
-}
-
-// --- بخش مدیریت گروه‌ها (Modal بدون Alert) ---
-
-function openCreateGroup() {
-    document.getElementById('group-modal').style.display = 'flex';
-}
-
-function closeGroupModal() {
-    document.getElementById('group-modal').style.display = 'none';
-}
-
-async function confirmCreateGroup() {
-    const name = document.getElementById('group-name-input').value;
-    const username = document.getElementById('group-username-input').value;
-    // فرض بر این است که المنت‌های HTML در پاسخ قبلی اضافه شده‌اند
-    if (!name) return;
+async function saveFullProfile() {
+    const profileData = {
+        email: myEmail,
+        username: document.getElementById('edit-username').value.trim(),
+        firstName: document.getElementById('edit-fullname').value.trim(),
+        bio: document.getElementById('edit-bio').value.trim()
+    };
 
     try {
-        const res = await fetch('/api/groups/create', {
+        const res = await fetch('/api/user/update-full', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, creator: myEmail })
+            body: JSON.stringify(profileData)
         });
+        const result = await res.json();
+        if(result.success) {
+            document.getElementById('edit-modal').style.display = 'none';
+            loadProfileData(); 
+            alert("تغییرات ذخیره شد ✅");
+        } else {
+            alert("خطا: آیدی ممکن است تکراری باشد.");
+        }
+    } catch (err) { alert("ارتباط با سرور قطع است"); }
+}
+
+function openEditModal() {
+    document.getElementById('edit-modal').style.display = 'flex';
+    document.getElementById('edit-fullname').value = myName;
+    document.getElementById('edit-username').value = document.getElementById('info-username').innerText.replace('@', '');
+    document.getElementById('edit-bio').value = document.getElementById('info-bio').innerText;
+}
+
+// --- پنل سمت راست (مشاهده مخاطب) ---
+async function openUserInfo() {
+    if (activeChat === "Saved Messages") return;
+    try {
+        const res = await fetch(`/api/user/profile?email=${activeChat}`);
         const data = await res.json();
         if (data.success) {
-            closeGroupModal();
-            socket.emit('getChatList', myEmail);
+            const u = data.user;
+            document.getElementById('panel-img').src = u.avatar || 'img/default-avatar.png';
+            document.getElementById('panel-name').innerText = u.firstName;
+            document.getElementById('panel-bio').innerText = u.bio || "بدون بیوگرافی";
+            document.getElementById('panel-username').innerText = u.username ? '@' + u.username : u.email;
+            document.getElementById('right-panel').classList.add('open');
         }
-    } catch (err) { console.error("Error creating group", err); }
-}
-
-function updateSidebarUI(item) {
-    const list = document.getElementById('chat-list');
-    const div = document.createElement('div');
-    div.className = 'chat-item';
-    div.style = "display:flex; align-items:center; gap:10px; padding:12px; cursor:pointer; position:relative;";
-
-    // ایجاد دایره تعداد پیام (اگر عدد بزرگتر از ۰ بود)
-    let unreadHtml = "";
-    if (item.unreadCount && item.unreadCount > 0) {
-        unreadHtml = `<span class="unread-badge" style="background:#86B6F6; color:white; border-radius:50%; padding:2px 8px; font-size:11px; margin-left:auto;">${item.unreadCount}</span>`;
-    }
-
-    div.innerHTML = `
-        <div class="avatar-sm" style="width:40px; height:40px; background:#eee; border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>
-        <div style="flex:1; overflow:hidden;">
-            <b style="font-size:14px;">${item.name}</b>
-            <div style="font-size:11px; color:gray; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.lastMsg}</div>
-        </div>
-        ${unreadHtml} 
-    `;
-
-    div.onclick = () => {
-        activeChat = item.email;
-        activeChatType = item.type;
-        chatTitle.innerText = item.name;
-        
-        // وقتی روی چت کلیک شد، به سرور بگو همه پیام‌ها رو سین کن (تا عدد غیب بشه)
-        socket.emit('markAllAsSeen', { myEmail: myEmail, partnerEmail: item.email });
-        
-        socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: item.email, isGroup: false });
-    };
-    list.appendChild(div);
-}
-
-// --- توابع پروفایل و حساب‌ها ---
-
-async function loadProfileData() {
-    const res = await fetch(`/api/user/profile?email=${myEmail}`);
-    const data = await res.json();
-    if (data.success && data.user) {
-        myName = data.user.firstName;
-        document.getElementById('display-name-top').innerText = myName;
-        document.getElementById('main-avatar').src = data.user.avatar || 'img/default-avatar.png';
-        document.getElementById('info-email').innerText = data.user.email;
-        document.getElementById('info-username').innerText = data.user.username || "بدون آیدی";
-    }
-}
-
-async function openAvatarViewer(targetEmail) {
-    const res = await fetch(`/api/user/profile?email=${targetEmail}`);
-    const data = await res.json();
-    if (data.success && data.user) {
-        userAvatars = [data.user.avatar, ...(data.user.avatarHistory || [])];
-        currentAvatarIndex = 0;
-        updateViewerDisplay();
-        document.getElementById('owner-tools').style.display = (targetEmail === myEmail) ? 'flex' : 'none';
-        document.getElementById('avatar-viewer').style.display = 'flex';
-    }
-}
-
-function updateViewerDisplay() {
-    document.getElementById('full-res-avatar').src = userAvatars[currentAvatarIndex] || 'img/default-avatar.png';
-    document.getElementById('avatar-counter').innerText = `${currentAvatarIndex + 1} از ${userAvatars.length}`;
-}
-
-function closeAvatarViewer() { document.getElementById('avatar-viewer').style.display = 'none'; }
-function nextAvatar() { if (currentAvatarIndex < userAvatars.length - 1) { currentAvatarIndex++; updateViewerDisplay(); } }
-function prevAvatar() { if (currentAvatarIndex > 0) { currentAvatarIndex--; updateViewerDisplay(); } }
-
-function renderConnectedAccounts() {
-    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const container = document.getElementById('accounts-list'); 
-    if (!container) return;
-    container.innerHTML = "";
-    accounts.forEach(acc => {
-        const div = document.createElement('div');
-        div.className = "account-item";
-        div.style = `padding:8px; cursor:pointer; margin-bottom:5px; border-radius:5px; background:${acc.email === myEmail ? '#e3f2fd' : '#f5f5f5'}`;
-        div.innerHTML = `<b>${acc.name}</b><br><small>${acc.email}</small>`;
-        if(acc.email !== myEmail) div.onclick = () => switchAccount(acc.email);
-        container.appendChild(div);
-    });
-}
-
-function switchAccount(email) {
-    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const target = accounts.find(a => a.email === email);
-    if(target) {
-        localStorage.setItem("email", target.email);
-        localStorage.setItem("firstName", target.name);
-        localStorage.setItem("token", target.token);
-        location.reload(); 
-    }
-}
-
-// اینتراکشن‌ها
-msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
-
-// وقتی سرور می‌گه لیست رو آپدیت کن
-socket.on('requestChatListUpdate', () => {
-    socket.emit('getChatList', myEmail);
-});
-
-// اصلاح تابع سین کردن در سمت کلاینت
-socket.on('updateTick', (msgId) => {
-    const tickElem = document.getElementById(`tick-${msgId}`);
-    if (tickElem) {
-        tickElem.innerText = '✔✔';
-        tickElem.style.color = '#4fc3f7';
-    }
-});
-
-function showProfile() { document.getElementById('profile-section').style.display = 'block'; }
-function hideProfile() { document.getElementById('profile-section').style.display = 'none'; }
-function viewMedia(url) { window.open(url, '_blank'); }
-function openRightPanel(targetEmail) {
-    document.getElementById('right-panel').classList.add('open');
-    
-    // گرفتن اطلاعات از سرور
-    fetch(`/api/user/profile?email=${targetEmail}`)
-    .then(res => res.json())
-    .then(data => {
-        if(data.success) {
-            document.getElementById('panel-avatar').src = data.user.avatar || 'img/default-avatar.png';
-            document.getElementById('panel-name').innerText = data.user.firstName;
-            document.getElementById('panel-subtext').innerText = data.user.username || targetEmail;
-            document.getElementById('panel-bio').innerText = data.user.bio || "No bio yet";
-        }
-    });
+    } catch (err) { console.error(err); }
 }
 
 function closeRightPanel() {
     document.getElementById('right-panel').classList.remove('open');
 }
 
-
-
-// باز کردن پنل پروفایل
-async function openUserInfo() {
-    if (activeChat === "Saved Messages") return;
-
-    try {
-        const res = await fetch(`/api/user/profile?email=${activeChat}`);
-        const data = await res.json();
-
-        if (data.success) {
-            const u = data.user;
-            const panel = document.getElementById('right-panel');
-            
-            // پر کردن اطلاعات
-            document.getElementById('panel-img').src = u.avatar || 'img/default-avatar.png';
-            document.getElementById('panel-name').innerText = u.firstName;
-            document.getElementById('panel-bio').innerText = u.bio || "بدون بیوگرافی";
-            document.getElementById('panel-username').innerText = u.username ? '@' + u.username : u.email;
-
-            // به جای کلاس، مستقیم استایل بده که مطمئن شویم باز می‌شود
-            panel.style.display = 'block'; 
-            panel.style.right = '0'; // اگر در CSS مقدار منفی دارد
-        }
-    } catch (err) { console.error("خطا در دریافت پروفایل:", err); }
-}
-
-// تابع بستن را هم اصلاح کن
-function closeRightPanel() {
-    const panel = document.getElementById('right-panel');
-    panel.style.display = 'none';
-    panel.classList.remove('open');
-}
-
-// اتصال به کلیک روی هدر چت
-document.querySelector('.chat-header').onclick = openUserInfo;
-
-async function saveFullProfile() {
-    const fullName = document.getElementById('edit-fullname').value;
-    const username = document.getElementById('edit-username').value;
-    const bio = document.getElementById('edit-bio').value;
-
-    if (!fullName) { alert("نام الزامی است"); return; }
-
-    try {
-        const res = await fetch('/api/user/update', { // مطمئن شو مسیر در بک‌انند همین است
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                email: myEmail, 
-                firstName: fullName, 
-                username: username, 
-                bio: bio 
-            })
-        });
-        const data = await res.json();
-        if (data.success) {
-            alert("تغییرات ذخیره شد!");
-            document.getElementById('edit-modal').style.display = 'none';
-            loadProfileData(); // رفرش کردن اطلاعات در صفحه
-        }
-    } catch (err) { alert("خطا در ذخیره اطلاعات"); }
-}
-
-// تابع باز کردن مودال ادیت با مقادیر فعلی
-function openEditModal() {
-    document.getElementById('edit-fullname').value = myName;
-    document.getElementById('edit-username').value = document.getElementById('info-username').innerText.replace('@', '');
-    document.getElementById('edit-bio').value = document.getElementById('info-bio').innerText;
-    document.getElementById('edit-modal').style.display = 'flex';
-}
-
-socket.on('message', (data) => {
-    const isMe = data.sender === myEmail;
-    const isTarget = (activeChat === data.receiver || activeChat === data.sender);
-
-    if (isTarget) {
-        appendMessage(data, isMe ? 'me' : 'other');
-    } else if (!isMe) {
-        // فقط اگر در صفحه چتِ آن شخص نیستیم نوتیفیکیشن بده
-        if (Notification.permission === "granted") {
-            new Notification(data.senderName || "AryaChat", {
-                body: `پیام جدید از ${data.senderName}: ${data.text || "فایل"}`,
-                icon: 'img/logoAryaChat.png'
-            });
-        }
-        const audio = new Audio('sounds/notify.mp3');
-        audio.play().catch(() => {});
-    }
-    socket.emit('getChatList', myEmail);
-});
-
+// --- مدیریت چند حسابی ---
+// --- مدیریت چند حسابی اصلاح شده ---
 function addAccount() {
-    // ۱. اطلاعات اکانت فعلی را در لیست ذخیره می‌کنیم که نپرد
-    const currentAcc = {
-        email: localStorage.getItem("email"),
-        name: localStorage.getItem("firstName"),
-        token: localStorage.getItem("token")
+    // ۱. اطلاعات اکانت فعلی را برای یادآوری ذخیره کن
+    const currentAcc = { 
+        email: localStorage.getItem("email"), 
+        name: localStorage.getItem("firstName"), 
+        token: localStorage.getItem("token"),
+        avatar: localStorage.getItem("userAvatar") || "img/default-avatar.png"
     };
+
     let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    
+    // اگر اکانت فعلی در لیست نبود، اضافه‌اش کن
     if (currentAcc.email && !all.find(a => a.email === currentAcc.email)) {
         all.push(currentAcc);
         localStorage.setItem("allAccounts", JSON.stringify(all));
     }
 
-    // ۲. یک کلید موقت می‌سازیم که صفحه لاگین بفهمد "قصد افزودن" داریم
+    // ۲. ست کردن سیگنال و پاک کردن توکن فعلی (بسیار مهم)
     localStorage.setItem("is_adding_new", "true");
-    
-    // ۳. حالا بدون پاک کردن توکن قبلی، فقط به صفحه لاگین برو
+    localStorage.removeItem("token"); 
+    localStorage.removeItem("email");
+    localStorage.removeItem("firstName");
+
+    // ۳. حالا بدون هیچ تداخلی برو به صفحه لاگین
     window.location.href = "/login.html";
 }
+
+// ضمناً درDOMContentLoaded این خط را حتماً داشته باش:
+socket.on('connect', () => {
+    socket.emit('join', myEmail);
+    socket.emit('getChatList', myEmail); // به محض وصل شدن لیست را بخواه
+});
+
 function logout() {
-    const accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const currentEmail = localStorage.getItem("email");
+    let accounts = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    accounts = accounts.filter(acc => acc.email !== myEmail);
+    localStorage.setItem("allAccounts", JSON.stringify(accounts));
 
-    // فقط اکانت فعلی را از لیست حذف کن
-    const filteredAccounts = accounts.filter(acc => acc.email !== currentEmail);
-    localStorage.setItem("allAccounts", JSON.stringify(filteredAccounts));
-
-    // اگر اکانت دیگری باقی مانده، برو روی آن، وگرنه برو صفحه لاگین
-    if (filteredAccounts.length > 0) {
-        const nextAcc = filteredAccounts[0];
-        localStorage.setItem("email", nextAcc.email);
-        localStorage.setItem("firstName", nextAcc.name);
-        localStorage.setItem("token", nextAcc.token);
+    if (accounts.length > 0) {
+        const next = accounts[0];
+        localStorage.setItem("email", next.email);
+        localStorage.setItem("firstName", next.name);
+        localStorage.setItem("token", next.token);
         location.reload();
     } else {
         localStorage.clear();
         window.location.href = "/login.html";
     }
 }
+
+function switchAccount(email) {
+    let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const target = all.find(acc => acc.email === email);
+    
+    if (target) {
+        localStorage.setItem("token", target.token);
+        localStorage.setItem("email", target.email);
+        localStorage.setItem("firstName", target.name);
+        localStorage.setItem("userAvatar", target.avatar || "img/default-avatar.png");
+        location.reload(); // صفحه را رفرش کن تا اکانت جدید لود شود
+    }
+}
+// --- توابع کمکی ---
+function showProfile() {
+    document.getElementById('profile-section').style.display = 'block';
+    document.getElementById('profile-overlay').style.display = 'block';
+    
+    // لود کردن عکس از حافظه
+    const savedAvatar = localStorage.getItem("userAvatar") || "img/default-avatar.png";
+    document.getElementById('main-avatar').src = savedAvatar;
+
+    // لود کردن بقیه اطلاعات
+    document.getElementById('display-name-top').innerText = localStorage.getItem("firstName") || "کاربر";
+    document.getElementById('info-email').innerText = localStorage.getItem("email") || "";
+    
+    renderConnectedAccounts();
+}
+
+function hideProfile() {
+    document.getElementById('profile-section').style.display = 'none';
+    document.getElementById('profile-overlay').style.display = 'none';
+}
+function viewMedia(url) { window.open(url, '_blank'); }
+
+// اینتراکشن‌ها
+msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+document.querySelector('.chat-header').onclick = openUserInfo;
+document.getElementById('main-avatar').onclick = () => openAvatarViewer(myEmail);
+
+// لود تاریخچه پیام‌ها
+socket.on('loadHistory', (messages) => {
+    messageContainer.innerHTML = messages.length ? "" : `<p style="text-align:center; color:gray; font-size:11px; margin-top:20px;">هنوز پیامی اینجا نیست.</p>`;
+    messages.forEach(msg => appendMessage(msg, msg.sender === myEmail ? 'me' : 'other'));
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+});
+
+// پیدا کردن این تابع و جایگزینی با این نسخه
+function updateSidebarUI(item) {
+    const list = document.getElementById('chat-list');
+    const div = document.createElement('div');
+    div.className = 'chat-item';
+    // اگر چت فعلی بود، استایل اکتیو بگیرد
+    if(activeChat === item.email) div.style.background = "#eef5f6";
+
+    let unreadHtml = (item.unreadCount > 0) ? `<span class="unread-badge" style="background:#048796; color:white; border-radius:12px; padding:2px 8px; font-size:10px; margin-left:5px;">${item.unreadCount}</span>` : "";
+
+    div.innerHTML = `
+        <div class="avatar-sm" style="width:40px; height:40px; background:#ddd; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px;">
+            ${item.email === "Saved Messages" ? "🔖" : "👤"}
+        </div>
+        <div style="flex:1; overflow:hidden; margin-right:10px; text-align:right;">
+            <b style="font-size:14px;">${item.name}</b>
+            <div style="font-size:11px; color:gray; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.lastMsg}</div>
+        </div>
+        ${unreadHtml}`;
+
+    div.onclick = () => {
+        activeChat = item.email;
+        activeChatType = item.type;
+        chatTitle.innerText = item.name;
+        messageContainer.innerHTML = "";
+        socket.emit('markAllAsSeen', { myEmail, partnerEmail: item.email });
+        socket.emit('getOldMessages', { userEmail: myEmail, otherEmail: item.email, isGroup: false });
+        // هایلایت کردن آیتم انتخاب شده
+        document.querySelectorAll('.chat-item').forEach(el => el.style.background = "none");
+        div.style.background = "#eef5f6";
+    };
+    list.appendChild(div);
+}
+
+// این لیسنر را هم اضافه کن که وقتی پیام جدید می‌آید لیست آپدیت شود
+socket.on('requestChatListUpdate', () => {
+    socket.emit('getChatList', myEmail);
+});
+
+// --- بخش مدیریت آپلود عکس پروفایل ---
+// این بخش را حتماً به chat.js اضافه کن
+function setupAvatarUpload() {
+    const avatarInput = document.createElement('input');
+    avatarInput.type = 'file';
+    avatarInput.id = 'avatarInput';
+    avatarInput.accept = 'image/*';
+    avatarInput.style.display = 'none';
+    document.body.appendChild(avatarInput);
+
+    // وقتی روی عکس پروفایل در پنل کلیک می‌کنی، پنجره انتخاب فایل باز شود
+    const profileImg = document.getElementById('main-avatar');
+    if (profileImg) {
+        profileImg.onclick = () => avatarInput.click();
+    }
+
+    avatarInput.onchange = async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function() {
+            const base64Image = reader.result;
+
+            try {
+                const response = await fetch('/api/user/update-avatar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: localStorage.getItem("email"), 
+                        avatar: base64Image 
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem("userAvatar", base64Image);
+                    // آپدیت آنی عکس در صفحه
+                    if(document.getElementById('main-avatar')) document.getElementById('main-avatar').src = base64Image;
+                    alert("عکس پروفایل با موفقیت تغییر کرد!");
+                }
+            } catch (err) {
+                console.error("Avatar Upload Error:", err);
+                alert("خطا در ارتباط با سرور");
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+}
+
+// صدا زدن تابع در ابتدای لود شدن صفحه چت
+setupAvatarUpload();

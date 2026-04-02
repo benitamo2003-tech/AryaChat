@@ -13,7 +13,7 @@ const server = http.createServer(app);
 // ۱. تنظیمات حجم برای فایل‌های سنگین
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
+ 
 // ۲. تنظیمات Socket.io
 const io = new Server(server, {
     maxHttpBufferSize: 1e8,
@@ -92,6 +92,47 @@ app.post('/api/auth/verify-code', async (req, res) => {
     res.json({ success: true, newUser: !user, user, token });
 });
 
+// --- مسیر تکمیل ثبت‌نام برای کاربر جدید ---
+app.post('/api/complete-profile', async (req, res) => {
+    const { email, firstName, lastName } = req.body;
+    try {
+        // ۱. پیدا کردن کاربر یا ساخت کاربر جدید اگر وجود ندارد
+        let user = await User.findOne({ email });
+        
+        if (!user) {
+            // اگر کاربر اصلاً در دیتابیس نبود، یکی بساز
+            user = new User({ 
+                email, 
+                firstName, 
+                lastName, 
+                avatar: 'img/default-avatar.png',
+                isRegistered: true 
+            });
+        } else {
+            // اگر کاربر وجود داشت (فقط کد تایید گرفته بود)، اطلاعاتش را تکمیل کن
+            user.firstName = firstName;
+            user.lastName = lastName;
+            user.isRegistered = true;
+        }
+
+        await user.save();
+
+        // ۲. ایجاد توکن جدید برای ورود
+        const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+
+        res.json({ 
+            success: true, 
+            token, 
+            firstName: user.firstName, 
+            email: user.email 
+        });
+
+    } catch (err) {
+        console.error("Complete Profile Error:", err);
+        res.status(500).json({ success: false, message: "خطای سرور در تکمیل پروفایل" });
+    }
+});
+
 app.get('/api/user/profile', async (req, res) => {
     try {
         const user = await User.findOne({ email: req.query.email });
@@ -99,16 +140,30 @@ app.get('/api/user/profile', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
+// --- اصلاح بخش آپدیت پروفایل ---
 app.post('/api/user/update-full', async (req, res) => {
     const { email, username, firstName, bio, birthDate } = req.body;
     try {
+        // ۱. چک کردن آیدی تکراری (اگر آیدی وارد شده باشد)
         if (username) {
             const existingUser = await User.findOne({ username, email: { $ne: email } });
             if (existingUser) return res.json({ success: false, message: "آیدی تکراری است" });
         }
-        await User.findOneAndUpdate({ email }, { username, firstName, bio, birthDate });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ success: false }); }
+
+        // ۲. آپدیت اطلاعات
+        const updatedUser = await User.findOneAndUpdate(
+            { email }, 
+            { username, firstName, bio, birthDate },
+            { new: true } // کاربر آپدیت شده را برگردان
+        );
+
+        if (!updatedUser) return res.json({ success: false, message: "کاربر پیدا نشد" });
+        
+        res.json({ success: true, user: updatedUser });
+    } catch (err) { 
+        console.error("Update Error:", err);
+        res.status(500).json({ success: false, message: "خطای سروری" }); 
+    }
 });
 
 app.post('/api/user/update-avatar', async (req, res) => {
@@ -178,10 +233,8 @@ io.on('connection', (socket) => {
 
     socket.on('joinGroup', (groupId) => {
         socket.join(groupId);
-        console.log(`👥 Joined Group: ${groupId}`);
     });
 
-    
     socket.on('chatMessage', async (data) => {
         try {
             const newMessage = new Message(data);
@@ -190,30 +243,21 @@ io.on('connection', (socket) => {
             if (data.type === 'group') {
                 io.to(data.receiver).emit('message', savedMsg);
             } else {
-                // ارسال به خودم (فرستنده)
                 socket.emit('message', savedMsg);
-                
-                // ارسال به گیرنده
                 if (data.receiver && data.receiver !== "Saved Messages") {
                     io.to(data.receiver).emit('message', savedMsg);
-                    
-                    // --- فیکس آپدیت لیست ---
-                    // به گیرنده می‌گیم لیست چت‌هات رو بروز کن تا نام فرستنده بیاد بالا
                     io.to(data.receiver).emit('requestChatListUpdate'); 
                 }
             }
-            // به خود فرستنده هم می‌گیم لیستش رو بروز کنه
             socket.emit('requestChatListUpdate');
-
         } catch (err) { console.log(err); }
     });
-
 
     socket.on('getOldMessages', async ({ userEmail, otherEmail, isGroup }) => {
         try {
             let query = isGroup 
                 ? { receiver: otherEmail, type: 'group' }
-                : (!otherEmail || otherEmail === "Saved Messages")
+                : (otherEmail === "Saved Messages")
                     ? { sender: userEmail, receiver: "Saved Messages" }
                     : { $or: [{ sender: userEmail, receiver: otherEmail }, { sender: otherEmail, receiver: userEmail }], type: 'private' };
             
@@ -222,63 +266,64 @@ io.on('connection', (socket) => {
         } catch (err) { console.log(err); }
     });
 
-    socket.on('messageSeen', async ({ msgId, sender }) => {
-        try {
-            const msg = await Message.findByIdAndUpdate(msgId, { seen: true }, { new: true });
-            if (msg) {
-                // خبر دادن به فرستنده که تیک رو آبی کن
-                io.to(msg.sender).emit('updateTick', msgId);
-                // خبر دادن به گیرنده (خودم) که تیک رو در صفحه خودش هم آبی ببینه
-                io.to(msg.receiver).emit('updateTick', msgId);
-            }
-        } catch (err) { console.log(err); }
-    });
-
+    // --- این بخش درست شد (لیست چت‌ها شامل Saved Messages) ---
     socket.on('getChatList', async (email) => {
     try {
-        const myGroups = await Group.find({ members: email });
-        // پیدا کردن تمام پیام‌های شخصی من
+        // ۱. پیدا کردن پیام‌ها
         const allPrivateMsgs = await Message.find({
             $or: [{ sender: email }, { receiver: email }],
-            receiver: { $ne: "Saved Messages" },
             type: 'private'
         }).sort({ time: -1 });
 
         const chatPartners = {};
+
+        // ۲. همیشه Saved Messages را به عنوان اولین آیتم بساز
+        chatPartners["Saved Messages"] = {
+            email: "Saved Messages",
+            lastMsg: "پیام‌های ذخیره شده",
+            name: "Saved Messages",
+            avatar: "img/default-avatar.png",
+            type: 'private',
+            unreadCount: 0
+        };
+
+        // ۳. استخراج مخاطبین از پیام‌ها
         for (const m of allPrivateMsgs) {
-            const partner = (m.sender === email) ? m.receiver : m.sender;
-            if (!chatPartners[partner]) {
-                // --- بخش جدید: شمارش پیام‌های سین نشده ---
-                const unreadCount = await Message.countDocuments({
-                    sender: partner,
-                    receiver: email,
-                    seen: false
-                });
+            let partner = (m.receiver === "Saved Messages") ? "Saved Messages" : (m.sender === email ? m.receiver : m.sender);
+            
+            if (!chatPartners[partner] || partner === "Saved Messages") {
+                const userDetail = await User.findOne({ email: partner });
+                const unread = await Message.countDocuments({ sender: partner, receiver: email, seen: false });
 
                 chatPartners[partner] = { 
                     email: partner, 
                     lastMsg: m.text || "فایل", 
-                    name: (m.sender === email ? "مخاطب" : m.senderName),
+                    name: partner === "Saved Messages" ? "Saved Messages" : (userDetail ? userDetail.firstName : partner),
+                    avatar: userDetail ? userDetail.avatar : "img/default-avatar.png",
                     type: 'private',
-                    unreadCount: unreadCount // اضافه کردن تعداد به لیست
+                    unreadCount: unread
                 };
             }
         }
-        socket.on('markAllAsSeen', async ({ myEmail, partnerEmail }) => {
-    try {
-        // تمام پیام‌هایی که از طرف مقابل به من رسیده رو به Seen تبدیل کن
-        await Message.updateMany(
-            { sender: partnerEmail, receiver: myEmail, seen: false },
-            { $set: { seen: true } }
-        );
-        // حالا لیست جدید رو بفرست تا عدد صفر بشه
-        socket.emit('requestChatListUpdate'); 
-        io.to(partnerEmail).emit('updateAllTicks'); // تیک‌های طرف مقابل رو هم دوتا کن
-    } catch (err) { console.log(err); }
+        
+        // خروجی نهایی: همیشه حداقل یک آیتم دارد
+        socket.emit('receiveChatList', Object.values(chatPartners));
+    } catch (err) { 
+        console.log("Error fetching list:", err);
+        socket.emit('receiveChatList', []); 
+    }
 });
-        // ارسال لیست نهایی
-        socket.emit('receiveChatList', [...Object.values(chatPartners)]);
-    } catch (err) { console.log(err); }
+
+    // این را از داخل getChatList آوردم بیرون که حافظه پر نشود
+    socket.on('markAllAsSeen', async ({ myEmail, partnerEmail }) => {
+        try {
+            await Message.updateMany(
+                { sender: partnerEmail, receiver: myEmail, seen: false },
+                { $set: { seen: true } }
+            );
+            socket.emit('requestChatListUpdate'); 
+            io.to(partnerEmail).emit('updateAllTicks');
+        } catch (err) { console.log(err); }
     });
 
     socket.on('disconnect', () => { console.log('❌ Disconnected'); });
