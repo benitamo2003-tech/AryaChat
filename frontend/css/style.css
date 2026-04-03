@@ -1,0 +1,32 @@
+/* جلوگیری از انتخاب و درگ کردن تصاویر پروفایل */
+img {
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* غیرفعال کردن کلیک راست روی تصاویر */
+.no-save {
+    pointer-events: none;
+}
+
+/* فقط برای عکس‌هایی که این کلاس رو دارن */
+.protected-avatar {
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none; /* این خط باعث می‌شه موس اصلاً عکس رو حس نکنه که بخواد روش راست‌کلیک کنه */
+}
+
+/* برای اینکه بتونی روش کلیک کنی (مثلاً برای باز کردن پروفایل) اما نشه ذخیره‌اش کرد، 
+   عکس رو داخل یک Div می‌ذاریم */
+.avatar-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    overflow: hidden;
+}

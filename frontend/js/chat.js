@@ -252,31 +252,89 @@ function logout() {
     }
 }
 
-function switchAccount(email) {
+// تابع سوئیچ کردن بین اکانت‌ها
+function switchAccount(targetEmail) {
     let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
-    const target = all.find(acc => acc.email === email);
+    const target = all.find(acc => acc.email === targetEmail);
     
     if (target) {
+        // ۱. اطلاعات اکانت فعلی رو قبل از رفتن ذخیره کن که نپره
+        saveCurrentAccountData();
+
+        // ۲. اطلاعات اکانت جدید رو جایگزین کن
         localStorage.setItem("token", target.token);
         localStorage.setItem("email", target.email);
         localStorage.setItem("firstName", target.name);
-        localStorage.setItem("userAvatar", target.avatar || "img/default-avatar.png");
-        location.reload(); // صفحه را رفرش کن تا اکانت جدید لود شود
+        
+        // ۳. رفرش صفحه برای بارگذاری اطلاعات اکانت جدید
+        location.reload();
     }
+}
+
+// ذخیره اطلاعات فعلی در لیست کلی (برای اینکه قاطی نشه)
+function saveCurrentAccountData() {
+    const email = localStorage.getItem("email");
+    if (!email) return;
+
+    let all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const index = all.findIndex(a => a.email === email);
+    
+    const currentData = {
+        email: email,
+        name: localStorage.getItem("firstName"),
+        token: localStorage.getItem("token"),
+        avatar: localStorage.getItem(`avatar_${email}`) // عکس مخصوص همین ایمیل
+    };
+
+    if (index > -1) all[index] = currentData;
+    else all.push(currentData);
+    
+    localStorage.setItem("allAccounts", JSON.stringify(all));
+}
+
+// نمایش لیست اکانت‌ها در پنل پروفایل
+function renderConnectedAccounts() {
+    const listDiv = document.getElementById("accounts-list");
+    const all = JSON.parse(localStorage.getItem("allAccounts") || "[]");
+    const myEmail = localStorage.getItem("email");
+    
+    listDiv.innerHTML = "";
+    if (all.length <= 1) {
+        listDiv.innerHTML = "<p style='font-size:11px; color:gray;'>حساب دیگری یافت نشد</p>";
+        return;
+    }
+
+    all.forEach(acc => {
+        if (acc.email === myEmail) return;
+        const div = document.createElement("div");
+        div.className = "account-item";
+        div.innerHTML = `
+            <img src="${acc.avatar || 'img/default-avatar.png'}" style="width:30px; height:30px; border-radius:50%;">
+            <span>${acc.name}</span>
+            <button onclick="switchAccount('${acc.email}')">سوئیچ</button>
+        `;
+        listDiv.appendChild(div);
+    });
 }
 // --- توابع کمکی ---
 function showProfile() {
+    const email = localStorage.getItem("email"); // ایمیل اکانت فعلی
+    
     document.getElementById('profile-section').style.display = 'block';
     document.getElementById('profile-overlay').style.display = 'block';
-    
-    // لود کردن عکس از حافظه
-    const savedAvatar = localStorage.getItem("userAvatar") || "img/default-avatar.png";
-    document.getElementById('main-avatar').src = savedAvatar;
 
-    // لود کردن بقیه اطلاعات
+    // ۱. لود عکس اصلی مخصوص این ایمیل
+    const mainAvatar = localStorage.getItem(`main_avatar_${email}`) || "img/default-avatar.png";
+    document.getElementById('main-avatar').src = mainAvatar;
+
+    // ۲. لود نام و بیو مخصوص این ایمیل
     document.getElementById('display-name-top').innerText = localStorage.getItem("firstName") || "کاربر";
-    document.getElementById('info-email').innerText = localStorage.getItem("email") || "";
-    
+    document.getElementById('info-email').innerText = email;
+
+    // ۳. لود گالری عکس‌های مخصوص این ایمیل
+    renderAvatarGallery(email);
+
+    // ۴. لود لیست اکانت‌های دیگر برای سوئیچ
     renderConnectedAccounts();
 }
 
@@ -338,7 +396,7 @@ socket.on('requestChatListUpdate', () => {
 });
 
 // --- بخش مدیریت آپلود عکس پروفایل ---
-// این بخش را حتماً به chat.js اضافه کن
+
 function setupAvatarUpload() {
     const avatarInput = document.createElement('input');
     avatarInput.type = 'file';
@@ -350,7 +408,13 @@ function setupAvatarUpload() {
     // وقتی روی عکس پروفایل در پنل کلیک می‌کنی، پنجره انتخاب فایل باز شود
     const profileImg = document.getElementById('main-avatar');
     if (profileImg) {
-        profileImg.onclick = () => avatarInput.click();
+        profileImg.onclick = () => {
+            // به جای باز کردن مستقیم انتخاب فایل، گالری داخلی اپلیکیشن را نشان بده
+            // کاربر از داخل گالری اپلیکیشن می‌تواند دکمه "افزودن" (که همان input.click است) را بزند
+            const email = localStorage.getItem("email");
+            renderAvatarGallery(email); 
+            // حالا کاربر لیست عکس‌ها را می‌بیند و می‌تواند حذف کند یا عکس جدید اضافه کند
+        };
     }
 
     avatarInput.onchange = async function(e) {
@@ -389,3 +453,47 @@ function setupAvatarUpload() {
 
 // صدا زدن تابع در ابتدای لود شدن صفحه چت
 setupAvatarUpload();
+
+async function deleteAvatar(photoIndex) {
+    const email = localStorage.getItem("email");
+    try {
+        const res = await fetch('/api/user/delete-avatar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, photoIndex })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert("عکس حذف شد");
+            location.reload(); // یا آپدیت کردن گالری
+        }
+    } catch (err) { console.error(err); }
+}
+
+// موقع نمایش پروفایل، عکس‌های مخصوص این کاربر رو لود کن
+function loadUserAvatars(user) {
+    const gallery = document.getElementById("avatar-gallery");
+    gallery.innerHTML = "";
+    
+    // فرض بر اینه که سرور آرایه‌ای از عکس‌ها رو در user.avatarHistory برمی‌گردونه
+    if (user.avatarHistory && user.avatarHistory.length > 0) {
+        user.avatarHistory.forEach((imgSrc, index) => {
+            const div = document.createElement("div");
+            div.style = "position:relative;";
+            div.innerHTML = `
+                <img src="${imgSrc}" style="width:50px; height:50px; border-radius:5px; object-fit:cover;">
+                <button onclick="deleteAvatar(${index})" style="position:absolute; top:0; right:0; background:red; color:white; border:none; border-radius:50%; width:15px; height:15px; font-size:10px; cursor:pointer;">×</button>
+            `;
+            gallery.appendChild(div);
+        });
+    }
+}
+
+
+// جلوگیری از راست‌کلیک فقط روی عکس‌های پروفایل
+document.addEventListener('contextmenu', function(e) {
+    if (e.target.classList.contains('protected-avatar') || e.target.closest('.avatar-container')) {
+        e.preventDefault();
+        return false;
+    }
+}, false);

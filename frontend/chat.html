@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/chat.css">
+    <link rel="stylesheet" href="css/style.css">
     <title>AryaChat - صفحه اصلی</title>
 </head>
 
@@ -45,6 +46,8 @@
                 <img id="group-avatar-preview" src="" style="display:none; width:100%; height:100%; border-radius:50%; object-fit:cover;">
             </div>
             <p style="font-size:11px; color:gray; margin-top:5px;">انتخاب عکس گروه</p>
+            <div id="group-avatar-gallery" style="display:flex; gap:5px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
+    </div>
             <input type="file" id="groupAvatarInput" style="display:none" onchange="previewGroupAvatar(this)">
         </div>
 
@@ -59,77 +62,158 @@
             <div id="chat-list" style="overflow-y: auto; height: calc(100% - 180px);"></div>
         </div>
 
-        <div id="profile-overlay" onclick="hideProfile()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.3); z-index:99;"></div>
+<div id="profile-overlay" onclick="hideProfile()" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.3); z-index:99;"></div>
+
+
 
 <div id="profile-section" class="sidebar" style="display:none; position:absolute; z-index:100; width:280px; height:100%; background:#fff; overflow-y:auto; border-left:1px solid #ddd; transition: all 0.3s ease;">
+
     <div style="background:#048796; color:white; padding:15px; display:flex; align-items:center; justify-content:space-between;">
+
         <div style="display:flex; align-items:center; gap:15px;">
+
             <i class="fa-solid fa-user-circle"></i>
+
             <span style="font-weight:bold;">پروفایل</span>
+
         </div>
+
         <button onclick="hideProfile()" style="background:none; border:none; color:white; cursor:pointer; font-size:20px;">
+
             <i class="fa-solid fa-xmark"></i>
+
         </button>
+
     </div>
 
+
+
     <div style="text-align:center; padding:20px; border-bottom:8px solid #f4f4f5;">
+
         <img id="main-avatar" src="img/default-avatar.png" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:2px solid #048796; cursor:pointer;">
+
         <h4 id="display-name-top" style="margin:10px 0 5px 0;">نام کاربر</h4>
+
         <p id="display-status-top" style="font-size:12px; color:gray;">آنلاین</p>
+
     </div>
-    
+
+   
+
     <div style="display:flex; justify-content:space-around; padding:15px; border-bottom:1px solid #eee;">
+
+
 
                 <button onclick="document.getElementById('avatarInput').click()" title="ست پروفایل" style="background:none; border:none; color:#048796; cursor:pointer;"><i class="fa-solid fa-camera fa-xl"></i><br><span style="font-size:10px;">ست عکس</span></button>
 
+
+
                 <button onclick="openEditModal()" title="ادیت اینفو" style="background:none; border:none; color:#048796; cursor:pointer;" class="edit-btn"><i class="fa-solid fa-pen fa-xl"></i><br><span style="font-size:10px;">ادیت اینفو</span></button>
+
+
 
                 <button onclick="alert('تنظیمات به زودی...')" title="ستینگ" style="background:none; border:none; color:#048796; cursor:pointer;"><i class="fa-solid fa-gear fa-xl"></i><br><span style="font-size:10px;">تنظیمات</span></button>
 
+
+
             </div>
-    
+
+   
+
             <div style="padding:15px;">
 
+
+
                 <div class="info-item" style="margin-bottom:15px;">
+
+
 
                     <i class="fa-solid fa-at" style="color:#048796;"></i>
 
+
+
                     <span id="info-username" style="margin-right:10px; font-weight:bold;">بدون آیدی</span>
+
+
 
                     <div style="font-size:11px; color:gray; margin-right:25px;">آیدی کاربری</div>
 
+
+
                 </div>
+
+
 
                 <div class="info-item" style="margin-bottom:15px;">
 
+
+
                     <i class="fa-solid fa-envelope" style="color:#048796;"></i>
+
+
 
                     <span id="info-email" style="margin-right:10px;">---</span>
 
+
+
                     <div style="font-size:11px; color:gray; margin-right:25px;">ایمیل</div>
 
+
+
                 </div>
+
+
 
                 <div class="info-item">
 
+
+
                     <i class="fa-solid fa-circle-info" style="color:#048796;"></i>
+
+
 
                     <p id="info-bio" style="margin:0 10px 0 0; font-size:14px; color:#333;">بیوگرافی شما...</p>
 
+
+
                     <div style="font-size:11px; color:gray; margin-right:25px;">بیو</div>
+
+
 
                 </div>
 
+
+
             </div>
+
+
+
+
+
+            <div style="padding:15px; border-top:1px solid #eee;">
+
+    <p style="font-size:12px; color:gray; margin-bottom:10px;">آلبوم تصاویر پروفایل</p>
+
+    <div id="user-avatar-gallery" style="display:flex; gap:8px; flex-wrap:wrap;">
+
+        </div>
+
+</div>
 
 
 
     <div style="border-top:8px solid #f4f4f5; padding:15px;">
+
         <h5 style="margin-top:0;">مدیریت حساب‌ها</h5>
+
         <div id="accounts-list" style="margin-top: 10px;"></div>
+
         <button onclick="addAccount()" style="width:100%; text-align:right; background:none; border:none; color:#048796; cursor:pointer; padding:10px 0;"><i class="fa-solid fa-user-plus"></i> افزودن اکانت جدید</button>
+
     </div>
+
     <button onclick="logout()" style="width:100%; padding:15px; background:none; border:none; cursor:pointer; border-top:1px solid #eee;">خروج از اکانت</button>
+
 </div>
 
         <div class="chat-area">
