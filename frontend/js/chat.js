@@ -497,3 +497,22 @@ document.addEventListener('contextmenu', function(e) {
         return false;
     }
 }, false);
+
+
+const emojis = ["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😍","😘","😗","😚","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","😳","🥵","🥶","😱","😨","😰","😥","😓","🤗","🤔","🤭","🤫","🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮","😲","🥱","😴","🤤","😪","😵","🤐","🥴","🤢","🤮","🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺","🤡","💩","👻","💀","☠️","👽","👾","🤖","🎃","😺","😸","😻","😼","😽","🙀","😿","😾"];
+
+function toggleEmojiPicker() {
+    const picker = document.getElementById('emoji-picker');
+    if (picker.style.display === 'none') {
+        picker.innerHTML = emojis.map(e => `<span onclick="addEmoji('${e}')" style="cursor:pointer; font-size:20px; padding:5px; display:inline-block;">${e}</span>`).join('');
+        picker.style.display = 'block';
+    } else {
+        picker.style.display = 'none';
+    }
+}
+
+function addEmoji(emoji) {
+    const input = document.getElementById('message-input'); // آی‌دی اینپوت چت خودت
+    input.value += emoji;
+    input.focus();
+}

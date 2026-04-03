@@ -226,8 +226,9 @@
             <div class="messages" id="messages"></div>
             
             <div class="input-area">
-                <button><i class="fa-regular fa-face-smile-wink" style="color: rgb(30, 48, 80); font-size: 20px;"></i></button>
-                
+                <button onclick="toggleEmojiPicker()"><i class="fa-regular fa-face-smile-wink" style="color: rgb(30, 48, 80); font-size: 20px;"></i></button>
+                <div id="emoji-picker" style="display:none; position:absolute; bottom:60px; right:20px; background:white; border:1px solid #ddd; border-radius:10px; width:250px; height:150px; overflow-y:auto; padding:10px; z-index:1000; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+    </div>
                 <input type="file" id="fileInput" style="display:none" onchange="sendFile(this)" accept="image/*,video/*,audio/*">
                 <button onclick="document.getElementById('fileInput').click()">
                     <i class="fa-solid fa-paperclip" style="color: rgb(30, 48, 80); font-size: 20px;"></i>
